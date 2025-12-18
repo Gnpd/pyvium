@@ -12,7 +12,7 @@ license = "Apache-2.0"
 name = "pyvium"
 packages = [{ include = "pyvium" }]
 readme = "README.md"
-version = "0.1.21beta"
+version = "0.1.21"
 classifiers = [
     # How mature is this project? Common values are
     #   3 - Alpha
