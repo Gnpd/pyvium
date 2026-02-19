@@ -1,12 +1,35 @@
 # PYVIUM
 
-Tiny Python wrapper around the "Software development driver DLL" for IviumSoft.
+Python wrapper for the IviumSoft driver DLL, enabling control of Ivium potentiostats and data processing directly from Python.
 
-# Important:
+PYVIUM provides both:
 
-This module uses a dll from the IviumSoft application. You need to have this software installed on a Windows machine. The IviumSoft application can be downloaded from here: https://www.ivium.com/support/#Software%20update
+- Direct access to the original IviumSoft Core functions
+- Higher-level Pythonic interface with exception handling and extended utilities
 
-This version of Pyvium contains the DLL from IviumSoft release 4.1221.
+---
+
+## Features
+
+- Full access to IviumSoft driver DLL functions
+- Python-friendly interface
+- Exception management
+- Data processing tools
+- Batch conversion utilities
+
+---
+
+## Requirements
+
+PYVIUM requires IviumSoft to be installed on a Windows machine, as it uses the official driver DLL.
+
+Download IviumSoft here:
+
+https://www.ivium.com/support/#Software%20update
+
+This version of PYVIUM contains the DLL from IviumSoft release **4.1221**.
+
+---
 
 ## Installation
 
@@ -22,7 +45,8 @@ Or with poetry:
 poetry add pyvium
 ```
 
-## Usage Example (Using IviumSoft Core functions)
+## Quick Start
+### Using Core functions (direct DLL access)
 
 To use the same functions available in the "IviumSoft driver DLL" you can import the Core class as follows. All functions return a result code (integer) and a result value if available. For further information you can check the IviumSoft documentation.
 
@@ -34,12 +58,13 @@ Core.IV_getdevicestatus()
 Core.IV_close()
 ```
 
-## Usage Example (Using Pyvium methods)
+## Using Pyvium high-level interface (recommended)
 
 This is a wrapper around the Core functions that adds a few things:
 
 - Exception management (you can find an example [here](https://github.com/SF-Tec/pyvium/blob/main/docs/error_management.md))
-- New functionalities
+- Cleaner syntax
+- Additional functionality
 
 ```
 from pyvium import Pyvium
@@ -49,7 +74,7 @@ Pyvium.get_device_status()
 Pyvium.close_driver()
 
 ```
-## Usage Example (Using Tools methods)
+## Data processing tools
 
 This offers further functionality in data processing:
 
@@ -61,9 +86,23 @@ Tools.convert_idf_dir_to_csv()
 
 ```
 
-## Supported functions
+## Implemented functions
 
-The list of currently supported and implemented functions can be found [here](https://github.com/SF-Tec/pyvium/blob/main/docs/method_list.md).
+The list of currently implemented functions can be found [here](https://github.com/SF-Tec/pyvium/blob/main/docs/method_list.md).
+
+## Support and Consulting
+
+If you need help implementing PYVIUM in your application, integrating Ivium instruments, or developing custom workflows, professional consulting is available.
+
+Contact:
+
+📧 a.gutierrez@g-npd.com
+
+You can also support the project via GitHub Sponsors:
+
+https://github.com/sponsors/Gnpd
+
+Sponsors receive priority support and help drive future development.
 
 ## Links
 
