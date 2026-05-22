@@ -48,9 +48,8 @@ class We32Functions(CoreBase):
         return result_code, list(values_arr)
 
     @staticmethod
-    def IV_we32readcurrents() -> tuple[int, float]:
-        '''REVISE! Returns array with 32 WE32 current values,
-            that are measured simultaneously'''
-        current_values_ptr = ffi.new(DOUBLE_PTR)
-        result_code = CoreBase.get_lib().IV_we32readcurrents(current_values_ptr)
-        return result_code, current_values_ptr[0]
+    def IV_we32readcurrents() -> tuple[int, list]:
+        '''Returns array with 32 WE32 current values measured simultaneously.'''
+        current_values_arr = ffi.new("double[32]")
+        result_code = CoreBase.get_lib().IV_we32readcurrents(current_values_arr)
+        return result_code, list(current_values_arr)
