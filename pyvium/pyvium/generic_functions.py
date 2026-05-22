@@ -128,6 +128,31 @@ class GenericFunctions():
         return version[:1] + '.' + version[1:]
 
     @staticmethod
+    def get_version_host() -> int:
+        '''Returns the required DLL version for the active IviumSoft version'''
+        PyviumVerifiers.verify_driver_is_open()
+        _, version = Core.IV_VersionHost(0)
+        return version
+
+    @staticmethod
+    def check_dll_version() -> bool:
+        '''Returns True if the DLL version matches the IviumSoft requirement'''
+        PyviumVerifiers.verify_driver_is_open()
+        return Core.IV_VersionCheck() == 1
+
+    @staticmethod
+    def get_host_handle() -> int:
+        '''Returns the host handle'''
+        PyviumVerifiers.verify_driver_is_open()
+        return Core.IV_HostHandle()
+
+    @staticmethod
+    def get_dll_version_string() -> str:
+        '''Returns the DLL build number as a string'''
+        PyviumVerifiers.verify_driver_is_open()
+        return str(Core.IV_VersionDllFileStr())
+
+    @staticmethod
     def select_channel(channel_number: int):
         '''Sending the integer value communicates with Multichannel control:
             if not yet active,
