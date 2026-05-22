@@ -6,7 +6,7 @@ ffi.cdef(
     long __stdcall IV_open();
     long __stdcall IV_close();
     long __stdcall IV_MaxDevices();
-    long __stdcall IV_selectdevice(long *devnr);
+    void __stdcall IV_selectdevice(long *devnr);
     long __stdcall IV_getdevicestatus();
     long __stdcall IV_readSN(char *sntext);
     long __stdcall IV_connect(long* devconnect);
@@ -18,7 +18,6 @@ ffi.cdef(
     long __stdcall IV_VersionDllFileStr();
     long __stdcall IV_SelectChannel(long *channel);
     long __stdcall IV_SelectSn(char *sntext);
-    long __stdcall IV_getDbFileName(char *fname);
 """
 )
 
@@ -42,11 +41,10 @@ class GenericFunctions(CoreBase):
         return CoreBase.get_lib().IV_MaxDevices()
 
     @staticmethod
-    def IV_selectdevice(iviumsoft_instance_number: int = 1) -> tuple[int, int]:
+    def IV_selectdevice(iviumsoft_instance_number: int = 1) -> None:
         """It allows to select one instance of the currently running IviumSoft instances"""
         instance_number_ptr = ffi.new(LONG_PTR, iviumsoft_instance_number)
-        result_code = CoreBase.get_lib().IV_selectdevice(instance_number_ptr)
-        return result_code, instance_number_ptr[0]
+        CoreBase.get_lib().IV_selectdevice(instance_number_ptr)
 
     @staticmethod
     def IV_getdevicestatus() -> int:
@@ -82,7 +80,7 @@ class GenericFunctions(CoreBase):
 
     @staticmethod
     def IV_VersionCheck() -> int:
-        """It returns 1 if the selected instance of IviumSoft is running"""
+        """Returns 1 if the DLL version matches the IviumSoft requirement, 0 otherwise"""
         return CoreBase.get_lib().IV_VersionCheck()
 
     @staticmethod
@@ -120,9 +118,3 @@ class GenericFunctions(CoreBase):
         result_code = CoreBase.get_lib().IV_SelectSn(serial_number_ptr)
         return result_code, ffi.string(serial_number_ptr).decode(UTF_ENCODING)
 
-    @staticmethod
-    def IV_getDbFileName():
-        """Selects device by serial number from the list of available devices to connect"""
-        db_path_ptr = ffi.new(CHAR_ARRAY, 16)
-        result_code = CoreBase.get_lib().IV_getDbFileName(db_path_ptr)
-        return result_code, ffi.string(db_path_ptr).decode(UTF_ENCODING)

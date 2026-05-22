@@ -37,7 +37,7 @@ class GenericFunctions():
         PyviumVerifiers.verify_iviumsoft_is_running()
         status_labels = {
             '-1': 'no IviumSoft',
-            '0': 'connected',
+            '0': 'not connected',
             '1': 'available_idle',
             '2': 'available_busy',
             '3': 'no device available'
@@ -47,7 +47,7 @@ class GenericFunctions():
 
     @staticmethod
     def is_iviumsoft_running() -> bool:
-        '''It returns true if if the selected instance of IviumSoft is running'''
+        '''It returns true if the selected instance of IviumSoft is running'''
         PyviumVerifiers.verify_driver_is_open()
         return Core.IV_getdevicestatus() != -1
 
@@ -57,7 +57,7 @@ class GenericFunctions():
         PyviumVerifiers.verify_driver_is_open()
         active_instances = []
         first_active_instance_number = 0
-        for instance_number in range(1, 32):
+        for instance_number in range(1, 33):
             Core.IV_selectdevice(instance_number)
 
             if Core.IV_getdevicestatus() != -1:
@@ -89,7 +89,7 @@ class GenericFunctions():
         '''Returns the serial number of the currently selected device if available'''
         PyviumVerifiers.verify_driver_is_open()
         PyviumVerifiers.verify_iviumsoft_is_running()
-        PyviumVerifiers.veryfy_device_is_connected_to_computer()
+        PyviumVerifiers.verify_device_is_connected_to_computer()
         _, serial_number = Core.IV_readSN()
         if serial_number == '':
             raise DeviceNotConnectedToIviumSoftError(
@@ -101,7 +101,7 @@ class GenericFunctions():
         '''It connects the currently selected device'''
         PyviumVerifiers.verify_driver_is_open()
         PyviumVerifiers.verify_iviumsoft_is_running()
-        PyviumVerifiers.veryfy_device_is_connected_to_computer()
+        PyviumVerifiers.verify_device_is_connected_to_computer()
         Core.IV_connect(1)
 
     @staticmethod
@@ -109,7 +109,7 @@ class GenericFunctions():
         '''It disconnects the currently selected device'''
         PyviumVerifiers.verify_driver_is_open()
         PyviumVerifiers.verify_iviumsoft_is_running()
-        PyviumVerifiers.veryfy_device_is_connected_to_computer()
+        PyviumVerifiers.verify_device_is_connected_to_computer()
         Core.IV_connect(0)
 
     @staticmethod
@@ -122,10 +122,33 @@ class GenericFunctions():
     def get_iviumsoft_version() -> str:
         '''Returns the version of the IviumSoft that match with this pyvium version'''
         PyviumVerifiers.verify_driver_is_open()
-        version_str = str(Core.IV_VersionDllFile())[slice(5)]
-        sliced_str = slice(5)
-        version = version_str[sliced_str]
+        version = str(Core.IV_VersionDllFile())[:5]
         return version[:1] + '.' + version[1:]
+
+    @staticmethod
+    def get_version_host() -> int:
+        '''Returns the required DLL version for the active IviumSoft version'''
+        PyviumVerifiers.verify_driver_is_open()
+        _, version = Core.IV_VersionHost(0)
+        return version
+
+    @staticmethod
+    def check_dll_version() -> bool:
+        '''Returns True if the DLL version matches the IviumSoft requirement'''
+        PyviumVerifiers.verify_driver_is_open()
+        return Core.IV_VersionCheck() == 1
+
+    @staticmethod
+    def get_host_handle() -> int:
+        '''Returns the host handle'''
+        PyviumVerifiers.verify_driver_is_open()
+        return Core.IV_HostHandle()
+
+    @staticmethod
+    def get_dll_version_string() -> str:
+        '''Returns the DLL build number as a string'''
+        PyviumVerifiers.verify_driver_is_open()
+        return str(Core.IV_VersionDllFileStr())
 
     @staticmethod
     def select_channel(channel_number: int):
@@ -140,3 +163,17 @@ class GenericFunctions():
         PyviumVerifiers.verify_driver_is_open()
         PyviumVerifiers.verify_iviumsoft_is_running()
         Core.IV_SelectChannel(channel_number)
+
+    @staticmethod
+    def select_serial_number(serial_number: str) -> int:
+        '''Selects a device by serial number, making it ready to connect.
+            Returns the position index in the dropdown list (0-based).
+            Raises DeviceNotConnectedToIviumSoftError if the serial number is not
+            in the list or a device is already connected.'''
+        PyviumVerifiers.verify_driver_is_open()
+        PyviumVerifiers.verify_iviumsoft_is_running()
+        result_code, _ = Core.IV_SelectSn(serial_number)
+        if result_code == -1:
+            raise DeviceNotConnectedToIviumSoftError(
+                f'Serial number {serial_number} not found in device list or a device is already connected')
+        return result_code

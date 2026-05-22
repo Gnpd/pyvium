@@ -33,7 +33,7 @@ class PyviumVerifiers:
             raise DeviceNotConnectedToIviumSoftError
 
     @staticmethod
-    def veryfy_device_is_connected_to_computer():
+    def verify_device_is_connected_to_computer():
         '''Raise exception if no device is connected to your computer through usb'''
         device_status = Core.IV_getdevicestatus()
 
@@ -49,7 +49,7 @@ class PyviumVerifiers:
 
     @staticmethod
     def verify_cell_is_on():
-        '''Raise exception if the is off'''
+        '''Raise exception if the cell is off'''
         _, device_status = Core.IV_getcellstatus()
         if not device_status:
             raise CellOffError
