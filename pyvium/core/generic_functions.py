@@ -18,7 +18,6 @@ ffi.cdef(
     long __stdcall IV_VersionDllFileStr();
     long __stdcall IV_SelectChannel(long *channel);
     long __stdcall IV_SelectSn(char *sntext);
-    long __stdcall IV_getDbFileName(char *fname);
 """
 )
 
@@ -119,9 +118,3 @@ class GenericFunctions(CoreBase):
         result_code = CoreBase.get_lib().IV_SelectSn(serial_number_ptr)
         return result_code, ffi.string(serial_number_ptr).decode(UTF_ENCODING)
 
-    @staticmethod
-    def IV_getDbFileName():
-        """Returns the path and filename of the last created SQL databasefile"""
-        db_path_ptr = ffi.new(CHAR_ARRAY, 256)
-        result_code = CoreBase.get_lib().IV_getDbFileName(db_path_ptr)
-        return result_code, ffi.string(db_path_ptr).decode(UTF_ENCODING)
