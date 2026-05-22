@@ -7,10 +7,12 @@ ffi.cdef("""
     long __stdcall IV_startmethod(char *fname);
     long __stdcall IV_abort();
     long __stdcall IV_savedata(char *fname);
+    long __stdcall IV_savedataset(char *fname);
     long __stdcall IV_setmethodparameter(char *parname, char *parvalue);
     long __stdcall IV_Ndatapoints(long *value);
     long __stdcall IV_getdata(long *pointnr, double *x, double *y, double *z);
     long __stdcall IV_getdatafromline(long *pointnr, long *scannr, double *x, double *y, double *z);
+    long __stdcall IV_UpdateTemperature(double *value);
 """)
 
 
@@ -89,6 +91,20 @@ class MethodModeFunctions(CoreBase):
         result_code = CoreBase.get_lib().IV_getdata(
             selected_data_point_index_ptr, measured_value1_ptr, measured_value2_ptr, measured_value3_ptr)
         return result_code, measured_value1_ptr[0], measured_value2_ptr[0], measured_value3_ptr[0]
+
+    @staticmethod
+    def IV_savedataset(file_path: str) -> tuple[int, str]:
+        '''Saves all result data in the measurement list to disk at the given path.'''
+        file_path_ptr = ffi.new(CHAR_ARRAY, file_path.encode(UTF_ENCODING))
+        result_code = CoreBase.get_lib().IV_savedataset(file_path_ptr)
+        return result_code, ffi.string(file_path_ptr).decode(UTF_ENCODING)
+
+    @staticmethod
+    def IV_UpdateTemperature(temperature: float) -> tuple[int, float]:
+        '''Updates the shared temperature for all channels (beta).'''
+        temperature_ptr = ffi.new(DOUBLE_PTR, temperature)
+        result_code = CoreBase.get_lib().IV_UpdateTemperature(temperature_ptr)
+        return result_code, temperature_ptr[0]
 
     @staticmethod
     def IV_getdatafromline(data_point_index: int, scan_index: int) -> tuple[int, float, float, float]:
