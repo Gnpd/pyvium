@@ -57,7 +57,7 @@ class GenericFunctions():
         PyviumVerifiers.verify_driver_is_open()
         active_instances = []
         first_active_instance_number = 0
-        for instance_number in range(1, 32):
+        for instance_number in range(1, 33):
             Core.IV_selectdevice(instance_number)
 
             if Core.IV_getdevicestatus() != -1:
