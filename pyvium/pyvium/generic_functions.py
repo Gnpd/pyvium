@@ -163,3 +163,17 @@ class GenericFunctions():
         PyviumVerifiers.verify_driver_is_open()
         PyviumVerifiers.verify_iviumsoft_is_running()
         Core.IV_SelectChannel(channel_number)
+
+    @staticmethod
+    def select_serial_number(serial_number: str) -> int:
+        '''Selects a device by serial number, making it ready to connect.
+            Returns the position index in the dropdown list (0-based).
+            Raises DeviceNotConnectedToIviumSoftError if the serial number is not
+            in the list or a device is already connected.'''
+        PyviumVerifiers.verify_driver_is_open()
+        PyviumVerifiers.verify_iviumsoft_is_running()
+        result_code, _ = Core.IV_SelectSn(serial_number)
+        if result_code == -1:
+            raise DeviceNotConnectedToIviumSoftError(
+                f'Serial number {serial_number} not found in device list or a device is already connected')
+        return result_code
