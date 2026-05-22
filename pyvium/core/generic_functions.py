@@ -81,7 +81,7 @@ class GenericFunctions(CoreBase):
 
     @staticmethod
     def IV_VersionCheck() -> int:
-        """It returns 1 if the selected instance of IviumSoft is running"""
+        """Returns 1 if the DLL version matches the IviumSoft requirement, 0 otherwise"""
         return CoreBase.get_lib().IV_VersionCheck()
 
     @staticmethod
