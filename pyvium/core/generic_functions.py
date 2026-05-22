@@ -6,7 +6,7 @@ ffi.cdef(
     long __stdcall IV_open();
     long __stdcall IV_close();
     long __stdcall IV_MaxDevices();
-    long __stdcall IV_selectdevice(long *devnr);
+    void __stdcall IV_selectdevice(long *devnr);
     long __stdcall IV_getdevicestatus();
     long __stdcall IV_readSN(char *sntext);
     long __stdcall IV_connect(long* devconnect);
@@ -42,11 +42,10 @@ class GenericFunctions(CoreBase):
         return CoreBase.get_lib().IV_MaxDevices()
 
     @staticmethod
-    def IV_selectdevice(iviumsoft_instance_number: int = 1) -> tuple[int, int]:
+    def IV_selectdevice(iviumsoft_instance_number: int = 1) -> None:
         """It allows to select one instance of the currently running IviumSoft instances"""
         instance_number_ptr = ffi.new(LONG_PTR, iviumsoft_instance_number)
-        result_code = CoreBase.get_lib().IV_selectdevice(instance_number_ptr)
-        return result_code, instance_number_ptr[0]
+        CoreBase.get_lib().IV_selectdevice(instance_number_ptr)
 
     @staticmethod
     def IV_getdevicestatus() -> int:
