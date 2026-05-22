@@ -199,44 +199,44 @@ class DirectModeFunctions(CoreBase):
     @staticmethod
     def IV_getcurrenttrace(
         points_quantity: int, interval_rate: float
-    ) -> tuple[int, float]:
-        """Returns a sequence of measured currents at defined samplingrate
-        (npoints, interval, array of double): npoints<=256, interval: 10us to 20ms"""
+    ) -> tuple[int, list]:
+        """Returns a sequence of measured currents at defined samplingrate.
+        npoints<=256, interval: 10us to 20ms"""
         points_quantity_ptr = ffi.new(LONG_PTR, points_quantity)
         interval_rate_ptr = ffi.new(DOUBLE_PTR, interval_rate)
-        result_ptr = ffi.new(DOUBLE_PTR)
+        values_arr = ffi.new(f"double[{points_quantity}]")
         result_code = CoreBase.get_lib().IV_getcurrenttrace(
-            points_quantity_ptr, interval_rate_ptr, result_ptr
+            points_quantity_ptr, interval_rate_ptr, values_arr
         )
-        return result_code, result_ptr[0]
+        return result_code, list(values_arr)
 
     @staticmethod
     def IV_getcurrentWE2trace(
         points_quantity: int, interval_rate: float
-    ) -> tuple[int, float]:
-        """Returns a sequence of measured WE2 currents at defined samplingrate
-        (npoints, interval, array of double): npoints<=256, interval: 10us to 20ms"""
+    ) -> tuple[int, list]:
+        """Returns a sequence of measured WE2 currents at defined samplingrate.
+        npoints<=256, interval: 10us to 20ms"""
         points_quantity_ptr = ffi.new(LONG_PTR, points_quantity)
         interval_rate_ptr = ffi.new(DOUBLE_PTR, interval_rate)
-        result_ptr = ffi.new(DOUBLE_PTR)
+        values_arr = ffi.new(f"double[{points_quantity}]")
         result_code = CoreBase.get_lib().IV_getcurrentWE2trace(
-            points_quantity_ptr, interval_rate_ptr, result_ptr
+            points_quantity_ptr, interval_rate_ptr, values_arr
         )
-        return result_code, result_ptr[0]
+        return result_code, list(values_arr)
 
     @staticmethod
     def IV_getpotentialtrace(
         points_quantity: int, interval_rate: float
-    ) -> tuple[int, float]:
-        """Returns a sequence of measured potentials at defined samplingrate
-        (npoints, interval, array of double): npoints<=256, interval: 10us to 20ms"""
+    ) -> tuple[int, list]:
+        """Returns a sequence of measured potentials at defined samplingrate.
+        npoints<=256, interval: 10us to 20ms"""
         points_quantity_ptr = ffi.new(LONG_PTR, points_quantity)
         interval_rate_ptr = ffi.new(DOUBLE_PTR, interval_rate)
-        result_ptr = ffi.new(DOUBLE_PTR)
+        values_arr = ffi.new(f"double[{points_quantity}]")
         result_code = CoreBase.get_lib().IV_getpotentialtrace(
-            points_quantity_ptr, interval_rate_ptr, result_ptr
+            points_quantity_ptr, interval_rate_ptr, values_arr
         )
-        return result_code, result_ptr[0]
+        return result_code, list(values_arr)
 
     @staticmethod
     def IV_selectdevicesetvalue(instance: int, value_type: int, value: float) -> int:
