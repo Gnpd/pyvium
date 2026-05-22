@@ -27,6 +27,7 @@ ffi.cdef(
     long __stdcall IV_getcurrenttrace(long* npoints, double *rate, double *values);
     long __stdcall IV_getcurrentWE2trace(long* npoints, double *rate, double *values);
     long __stdcall IV_getpotentialtrace(long* npoints, double *rate, double *values);
+    long __stdcall IV_selectdevicesetvalue(long *devnr, long *valuetype, double *value);
 """
 )
 
@@ -236,3 +237,14 @@ class DirectModeFunctions(CoreBase):
             points_quantity_ptr, interval_rate_ptr, result_ptr
         )
         return result_code, result_ptr[0]
+
+    @staticmethod
+    def IV_selectdevicesetvalue(instance: int, value_type: int, value: float) -> int:
+        """Set potential or current on a selected device instance.
+        instance: IviumSoft instance number; value_type: 0=current, 1=potential"""
+        instance_ptr = ffi.new(LONG_PTR, instance)
+        value_type_ptr = ffi.new(LONG_PTR, value_type)
+        value_ptr = ffi.new(DOUBLE_PTR, value)
+        return CoreBase.get_lib().IV_selectdevicesetvalue(
+            instance_ptr, value_type_ptr, value_ptr
+        )
