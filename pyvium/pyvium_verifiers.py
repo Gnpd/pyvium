@@ -49,7 +49,7 @@ class PyviumVerifiers:
 
     @staticmethod
     def verify_cell_is_on():
-        '''Raise exception if the is off'''
+        '''Raise exception if the cell is off'''
         _, device_status = Core.IV_getcellstatus()
         if not device_status:
             raise CellOffError

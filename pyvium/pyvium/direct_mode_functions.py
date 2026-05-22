@@ -195,6 +195,40 @@ class DirectModeFunctions():
         return Core.IV_getpotentialtrace(points_quantity, interval_rate)
 
     @staticmethod
+    def set_digital_output(value: int):
+        '''Set digital output lines on the external port. value is a bitmask.'''
+        PyviumVerifiers.verify_driver_is_open()
+        PyviumVerifiers.verify_iviumsoft_is_running()
+        PyviumVerifiers.verify_device_is_connected_to_iviumsoft()
+        Core.IV_setdigout(value)
+
+    @staticmethod
+    def get_digital_input() -> int:
+        '''Returns the status of digital input lines on the external port as a bitmask.'''
+        PyviumVerifiers.verify_driver_is_open()
+        PyviumVerifiers.verify_iviumsoft_is_running()
+        PyviumVerifiers.verify_device_is_connected_to_iviumsoft()
+        _, value = Core.IV_getdigin()
+        return value
+
+    @staticmethod
+    def set_we32_channel(channel_index: int):
+        '''Select the active WE32 channel.'''
+        PyviumVerifiers.verify_driver_is_open()
+        PyviumVerifiers.verify_iviumsoft_is_running()
+        PyviumVerifiers.verify_device_is_connected_to_iviumsoft()
+        Core.IV_we32setchannel(channel_index)
+
+    @staticmethod
+    def set_we32_offset(channel_index: int, value: float):
+        '''Set WE32 offset for a single channel, value -2 to +2V.
+            Use channel_index=0 to apply the same offset to all channels.'''
+        PyviumVerifiers.verify_driver_is_open()
+        PyviumVerifiers.verify_iviumsoft_is_running()
+        PyviumVerifiers.verify_device_is_connected_to_iviumsoft()
+        Core.IV_we32setoffset(channel_index, value)
+
+    @staticmethod
     def set_we32_offsets(number_of_channels: int, values: list):
         '''Set WE32 offset values for multiple channels.
             number_of_channels: 1..32; values: list of offsets in Volts (-2 to +2V)'''
@@ -202,6 +236,24 @@ class DirectModeFunctions():
         PyviumVerifiers.verify_iviumsoft_is_running()
         PyviumVerifiers.verify_device_is_connected_to_iviumsoft()
         Core.IV_we32setoffsets(number_of_channels, values)
+
+    @staticmethod
+    def get_we32_offsets(number_of_channels: int) -> list:
+        '''Returns the current WE32 offset values for the given number of channels (1..32).'''
+        PyviumVerifiers.verify_driver_is_open()
+        PyviumVerifiers.verify_iviumsoft_is_running()
+        PyviumVerifiers.verify_device_is_connected_to_iviumsoft()
+        _, values = Core.IV_we32getoffsets(number_of_channels)
+        return values
+
+    @staticmethod
+    def read_we32_currents() -> list:
+        '''Returns a list of 32 WE32 current values measured simultaneously.'''
+        PyviumVerifiers.verify_driver_is_open()
+        PyviumVerifiers.verify_iviumsoft_is_running()
+        PyviumVerifiers.verify_device_is_connected_to_iviumsoft()
+        _, values = Core.IV_we32readcurrents()
+        return values
 
     @staticmethod
     def set_device_current(instance: int, value: float):
