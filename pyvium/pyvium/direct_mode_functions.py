@@ -195,6 +195,31 @@ class DirectModeFunctions():
         return result_code, potential
 
     @staticmethod
+    def set_we32_offsets(number_of_channels: int, values: list):
+        '''Set WE32 offset values for multiple channels.
+            number_of_channels: 1..32; values: list of offsets in Volts (-2 to +2V)'''
+        PyviumVerifiers.verify_driver_is_open()
+        PyviumVerifiers.verify_iviumsoft_is_running()
+        PyviumVerifiers.verify_device_is_connected_to_iviumsoft()
+        Core.IV_we32setoffsets(number_of_channels, values)
+
+    @staticmethod
+    def set_device_current(instance: int, value: float):
+        '''Set current on a selected device instance (galvanostatic mode).
+            instance: IviumSoft instance number; value in Ampere'''
+        PyviumVerifiers.verify_driver_is_open()
+        PyviumVerifiers.verify_iviumsoft_is_running()
+        Core.IV_selectdevicesetvalue(instance, 0, value)
+
+    @staticmethod
+    def set_device_potential(instance: int, value: float):
+        '''Set potential on a selected device instance.
+            instance: IviumSoft instance number; value in Volt'''
+        PyviumVerifiers.verify_driver_is_open()
+        PyviumVerifiers.verify_iviumsoft_is_running()
+        Core.IV_selectdevicesetvalue(instance, 1, value)
+
+    @staticmethod
     def set_ac_amplitude(ac_amplitude: float):
         '''Set the value of the ac amplitude in Volts'''
         PyviumVerifiers.verify_driver_is_open()
