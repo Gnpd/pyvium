@@ -122,7 +122,7 @@ class GenericFunctions(CoreBase):
 
     @staticmethod
     def IV_getDbFileName():
-        """Selects device by serial number from the list of available devices to connect"""
+        """Returns the path and filename of the last created SQL databasefile"""
         db_path_ptr = ffi.new(CHAR_ARRAY, 16)
         result_code = CoreBase.get_lib().IV_getDbFileName(db_path_ptr)
         return result_code, ffi.string(db_path_ptr).decode(UTF_ENCODING)

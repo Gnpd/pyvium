@@ -95,6 +95,30 @@ class MethodModeFunctions():
         return value1, value2, value3
 
     @staticmethod
+    def get_db_file_name() -> str:
+        '''Returns the path and filename of the last created SQL database file'''
+        PyviumVerifiers.verify_driver_is_open()
+        PyviumVerifiers.verify_iviumsoft_is_running()
+        _, file_name = Core.IV_getDbFileName()
+        return file_name
+
+    @staticmethod
+    def update_temperature(value: float):
+        '''Updates the shared temperature for all channels (beta).
+            value in degrees Celsius'''
+        PyviumVerifiers.verify_driver_is_open()
+        PyviumVerifiers.verify_iviumsoft_is_running()
+        Core.IV_UpdateTemperature(value)
+
+    @staticmethod
+    def save_dataset(file_path: str):
+        '''Saves all result data in the measurement list to disk.
+            file_path represents the full path to the new file.'''
+        PyviumVerifiers.verify_driver_is_open()
+        PyviumVerifiers.verify_iviumsoft_is_running()
+        Core.IV_savedataset(file_path)
+
+    @staticmethod
     def get_data_point_from_scan(data_point_index: int, scan_index: int):
         '''Same as get_data_point, but with the additional scan_index parameter.
             This function will allow reading data from non-selected (previous) scans.'''
