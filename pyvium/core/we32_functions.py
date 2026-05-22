@@ -38,14 +38,14 @@ class We32Functions(CoreBase):
         return result_code
 
     @staticmethod
-    def IV_we32getoffsets(number_of_channels: int) -> tuple[int, float]:
-        '''REVISE! Returns actual WE32 offset values (Nchan,values),
+    def IV_we32getoffsets(number_of_channels: int) -> tuple[int, list]:
+        '''Returns actual WE32 offset values (Nchan, values),
             with Nchan the number of channels (1..32)'''
-        number_of_channels_index_ptr = ffi.new(LONG_PTR, number_of_channels)
-        values_ptr = ffi.new(DOUBLE_PTR)
+        number_of_channels_ptr = ffi.new(LONG_PTR, number_of_channels)
+        values_arr = ffi.new(f"double[{number_of_channels}]")
         result_code = CoreBase.get_lib().IV_we32getoffsets(
-            number_of_channels_index_ptr, values_ptr)
-        return result_code, values_ptr[0]
+            number_of_channels_ptr, values_arr)
+        return result_code, list(values_arr)
 
     @staticmethod
     def IV_we32readcurrents() -> tuple[int, float]:
