@@ -169,30 +169,30 @@ class DirectModeFunctions():
 
     @staticmethod
     def get_current_trace(points_quantity: int, interval_rate: float):
-        '''Returns a sequence of measured currents at defined samplingrate
-            (npoints, interval, array of double): npoints<=256, interval: 10us to 20ms'''
-        result_code, current = Core.IV_getcurrenttrace(
-            points_quantity, interval_rate)
-
-        return result_code, current
+        '''Returns a sequence of measured currents at defined samplingrate.
+            npoints<=256, interval: 10us to 20ms'''
+        PyviumVerifiers.verify_driver_is_open()
+        PyviumVerifiers.verify_iviumsoft_is_running()
+        PyviumVerifiers.verify_device_is_connected_to_iviumsoft()
+        return Core.IV_getcurrenttrace(points_quantity, interval_rate)
 
     @staticmethod
     def get_current_we2_trace(points_quantity: int, interval_rate: float):
-        '''Returns a sequence of measured WE2 currents at defined samplingrate
-            (npoints, interval, array of double): npoints<=256, interval: 10us to 20ms'''
-        result_code, current = Core.IV_getcurrentWE2trace(
-            points_quantity, interval_rate)
-
-        return result_code, current
+        '''Returns a sequence of measured WE2 currents at defined samplingrate.
+            npoints<=256, interval: 10us to 20ms'''
+        PyviumVerifiers.verify_driver_is_open()
+        PyviumVerifiers.verify_iviumsoft_is_running()
+        PyviumVerifiers.verify_device_is_connected_to_iviumsoft()
+        return Core.IV_getcurrentWE2trace(points_quantity, interval_rate)
 
     @staticmethod
-    def get_potencial_trace(points_quantity: int, interval_rate: float):
-        '''Returns a sequence of measured potentials at defined samplingrate
-            (npoints, interval, array of double): npoints<=256, interval: 10us to 20ms'''
-        result_code, potential = Core.IV_getpotentialtrace(
-            points_quantity, interval_rate)
-
-        return result_code, potential
+    def get_potential_trace(points_quantity: int, interval_rate: float):
+        '''Returns a sequence of measured potentials at defined samplingrate.
+            npoints<=256, interval: 10us to 20ms'''
+        PyviumVerifiers.verify_driver_is_open()
+        PyviumVerifiers.verify_iviumsoft_is_running()
+        PyviumVerifiers.verify_device_is_connected_to_iviumsoft()
+        return Core.IV_getpotentialtrace(points_quantity, interval_rate)
 
     @staticmethod
     def set_we32_offsets(number_of_channels: int, values: list):

@@ -33,7 +33,7 @@ class PyviumVerifiers:
             raise DeviceNotConnectedToIviumSoftError
 
     @staticmethod
-    def veryfy_device_is_connected_to_computer():
+    def verify_device_is_connected_to_computer():
         '''Raise exception if no device is connected to your computer through usb'''
         device_status = Core.IV_getdevicestatus()
 

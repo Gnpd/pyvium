@@ -37,7 +37,7 @@ class GenericFunctions():
         PyviumVerifiers.verify_iviumsoft_is_running()
         status_labels = {
             '-1': 'no IviumSoft',
-            '0': 'connected',
+            '0': 'not connected',
             '1': 'available_idle',
             '2': 'available_busy',
             '3': 'no device available'
@@ -89,7 +89,7 @@ class GenericFunctions():
         '''Returns the serial number of the currently selected device if available'''
         PyviumVerifiers.verify_driver_is_open()
         PyviumVerifiers.verify_iviumsoft_is_running()
-        PyviumVerifiers.veryfy_device_is_connected_to_computer()
+        PyviumVerifiers.verify_device_is_connected_to_computer()
         _, serial_number = Core.IV_readSN()
         if serial_number == '':
             raise DeviceNotConnectedToIviumSoftError(
@@ -101,7 +101,7 @@ class GenericFunctions():
         '''It connects the currently selected device'''
         PyviumVerifiers.verify_driver_is_open()
         PyviumVerifiers.verify_iviumsoft_is_running()
-        PyviumVerifiers.veryfy_device_is_connected_to_computer()
+        PyviumVerifiers.verify_device_is_connected_to_computer()
         Core.IV_connect(1)
 
     @staticmethod
@@ -109,7 +109,7 @@ class GenericFunctions():
         '''It disconnects the currently selected device'''
         PyviumVerifiers.verify_driver_is_open()
         PyviumVerifiers.verify_iviumsoft_is_running()
-        PyviumVerifiers.veryfy_device_is_connected_to_computer()
+        PyviumVerifiers.verify_device_is_connected_to_computer()
         Core.IV_connect(0)
 
     @staticmethod
