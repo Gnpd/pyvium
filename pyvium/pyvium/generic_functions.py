@@ -122,9 +122,7 @@ class GenericFunctions():
     def get_iviumsoft_version() -> str:
         '''Returns the version of the IviumSoft that match with this pyvium version'''
         PyviumVerifiers.verify_driver_is_open()
-        version_str = str(Core.IV_VersionDllFile())[slice(5)]
-        sliced_str = slice(5)
-        version = version_str[sliced_str]
+        version = str(Core.IV_VersionDllFile())[:5]
         return version[:1] + '.' + version[1:]
 
     @staticmethod
