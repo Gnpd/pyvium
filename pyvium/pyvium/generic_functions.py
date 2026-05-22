@@ -47,7 +47,7 @@ class GenericFunctions():
 
     @staticmethod
     def is_iviumsoft_running() -> bool:
-        '''It returns true if if the selected instance of IviumSoft is running'''
+        '''It returns true if the selected instance of IviumSoft is running'''
         PyviumVerifiers.verify_driver_is_open()
         return Core.IV_getdevicestatus() != -1
 
