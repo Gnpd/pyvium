@@ -28,13 +28,13 @@ class We32Functions(CoreBase):
         return result_code
 
     @staticmethod
-    def IV_we32setoffsets(number_of_channels: int, value: float) -> int:
-        '''REVISE! Set WE32 offsets values (Nchan,values),
+    def IV_we32setoffsets(number_of_channels: int, values: list) -> int:
+        '''Set WE32 offset values for multiple channels (Nchan, values),
             with Nchan the number of channels (1..32)'''
-        number_of_channels_index_ptr = ffi.new(LONG_PTR, number_of_channels)
-        value_ptr = ffi.new(DOUBLE_PTR, value)
+        number_of_channels_ptr = ffi.new(LONG_PTR, number_of_channels)
+        values_arr = ffi.new(f"double[{len(values)}]", values)
         result_code = CoreBase.get_lib().IV_we32setoffsets(
-            number_of_channels_index_ptr, value_ptr)
+            number_of_channels_ptr, values_arr)
         return result_code
 
     @staticmethod
