@@ -123,6 +123,6 @@ class GenericFunctions(CoreBase):
     @staticmethod
     def IV_getDbFileName():
         """Returns the path and filename of the last created SQL databasefile"""
-        db_path_ptr = ffi.new(CHAR_ARRAY, 16)
+        db_path_ptr = ffi.new(CHAR_ARRAY, 256)
         result_code = CoreBase.get_lib().IV_getDbFileName(db_path_ptr)
         return result_code, ffi.string(db_path_ptr).decode(UTF_ENCODING)
