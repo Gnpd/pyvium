@@ -33,19 +33,22 @@ class DirectModeFunctions():
         PyviumVerifiers.verify_driver_is_open()
         PyviumVerifiers.verify_iviumsoft_is_running()
         PyviumVerifiers.verify_device_is_connected_to_iviumsoft()
-        Core.IV_setconnectionmode(connection_mode_number)
+        result_code = Core.IV_setconnectionmode(connection_mode_number)
+        PyviumVerifiers.verify_result_code(result_code, "set_connection_mode")
 
     @staticmethod
     def set_cell_on():
         '''Set cell on '''
         if 'Cell off' in DirectModeFunctions.get_cell_status():
-            Core.IV_setcellon(1)
+            result_code = Core.IV_setcellon(1)
+            PyviumVerifiers.verify_result_code(result_code, "set_cell_on")
 
     @staticmethod
     def set_cell_off():
         '''Set cell off '''
         if 'Cell on' in DirectModeFunctions.get_cell_status():
-            Core.IV_setcellon(0)
+            result_code = Core.IV_setcellon(0)
+            PyviumVerifiers.verify_result_code(result_code, "set_cell_off")
 
     @staticmethod
     def set_potential(potential_value: float):
@@ -53,7 +56,8 @@ class DirectModeFunctions():
         PyviumVerifiers.verify_driver_is_open()
         PyviumVerifiers.verify_iviumsoft_is_running()
         PyviumVerifiers.verify_device_is_connected_to_iviumsoft()
-        Core.IV_setpotential(potential_value)
+        result_code = Core.IV_setpotential(potential_value)
+        PyviumVerifiers.verify_result_code(result_code, "set_potential")
 
     @staticmethod
     def set_we2_potential(potential_we2_value: float):
@@ -61,7 +65,8 @@ class DirectModeFunctions():
         PyviumVerifiers.verify_driver_is_open()
         PyviumVerifiers.verify_iviumsoft_is_running()
         PyviumVerifiers.verify_device_is_connected_to_iviumsoft()
-        Core.IV_setpotentialWE2(potential_we2_value)
+        result_code = Core.IV_setpotentialWE2(potential_we2_value)
+        PyviumVerifiers.verify_result_code(result_code, "set_we2_potential")
 
     @staticmethod
     def set_current(current_value: float):
@@ -69,7 +74,8 @@ class DirectModeFunctions():
         PyviumVerifiers.verify_driver_is_open()
         PyviumVerifiers.verify_iviumsoft_is_running()
         PyviumVerifiers.verify_device_is_connected_to_iviumsoft()
-        Core.IV_setcurrent(current_value)
+        result_code = Core.IV_setcurrent(current_value)
+        PyviumVerifiers.verify_result_code(result_code, "set_current")
 
     @staticmethod
     def get_potential() -> float:
@@ -86,7 +92,8 @@ class DirectModeFunctions():
         PyviumVerifiers.verify_driver_is_open()
         PyviumVerifiers.verify_iviumsoft_is_running()
         PyviumVerifiers.verify_device_is_connected_to_iviumsoft()
-        Core.IV_setcurrentrange(current_range_number)
+        result_code = Core.IV_setcurrentrange(current_range_number)
+        PyviumVerifiers.verify_result_code(result_code, "set_current_range")
 
     @staticmethod
     def set_we2_current_range(current_range_number: int):
@@ -94,7 +101,8 @@ class DirectModeFunctions():
         PyviumVerifiers.verify_driver_is_open()
         PyviumVerifiers.verify_iviumsoft_is_running()
         PyviumVerifiers.verify_device_is_connected_to_iviumsoft()
-        Core.IV_setcurrentrangeWE2(current_range_number)
+        result_code = Core.IV_setcurrentrangeWE2(current_range_number)
+        PyviumVerifiers.verify_result_code(result_code, "set_we2_current_range")
 
     @staticmethod
     def get_current() -> float:
@@ -120,7 +128,8 @@ class DirectModeFunctions():
         PyviumVerifiers.verify_driver_is_open()
         PyviumVerifiers.verify_iviumsoft_is_running()
         PyviumVerifiers.verify_device_is_connected_to_iviumsoft()
-        Core.IV_setfilter(filter_number)
+        result_code = Core.IV_setfilter(filter_number)
+        PyviumVerifiers.verify_result_code(result_code, "set_filter")
 
     @staticmethod
     def set_stability(stability_number: int):
@@ -128,7 +137,8 @@ class DirectModeFunctions():
         PyviumVerifiers.verify_driver_is_open()
         PyviumVerifiers.verify_iviumsoft_is_running()
         PyviumVerifiers.verify_device_is_connected_to_iviumsoft()
-        Core.IV_setstability(stability_number)
+        result_code = Core.IV_setstability(stability_number)
+        PyviumVerifiers.verify_result_code(result_code, "set_stability")
 
     @staticmethod
     def set_bistat_mode(value: int):
@@ -140,7 +150,8 @@ class DirectModeFunctions():
         PyviumVerifiers.verify_driver_is_open()
         PyviumVerifiers.verify_iviumsoft_is_running()
         PyviumVerifiers.verify_device_is_connected_to_iviumsoft()
-        Core.IV_setbistatmode(value)
+        result_code = Core.IV_setbistatmode(value)
+        PyviumVerifiers.verify_result_code(result_code, "set_bistat_mode")
 
     @staticmethod
     def set_dac(channel_number: int, value: float):
@@ -148,7 +159,8 @@ class DirectModeFunctions():
         PyviumVerifiers.verify_driver_is_open()
         PyviumVerifiers.verify_iviumsoft_is_running()
         PyviumVerifiers.verify_device_is_connected_to_iviumsoft()
-        Core.IV_setdac(channel_number, value)
+        result_code = Core.IV_setdac(channel_number, value)
+        PyviumVerifiers.verify_result_code(result_code, "set_dac")
 
     @staticmethod
     def get_adc(channel_number: int) -> float:
@@ -165,7 +177,8 @@ class DirectModeFunctions():
         PyviumVerifiers.verify_driver_is_open()
         PyviumVerifiers.verify_iviumsoft_is_running()
         PyviumVerifiers.verify_device_is_connected_to_iviumsoft()
-        Core.IV_setmuxchannel(channel_number)
+        result_code = Core.IV_setmuxchannel(channel_number)
+        PyviumVerifiers.verify_result_code(result_code, "set_mux_channel")
 
     @staticmethod
     def get_current_trace(points_quantity: int, interval_rate: float):
@@ -200,7 +213,8 @@ class DirectModeFunctions():
         PyviumVerifiers.verify_driver_is_open()
         PyviumVerifiers.verify_iviumsoft_is_running()
         PyviumVerifiers.verify_device_is_connected_to_iviumsoft()
-        Core.IV_setdigout(value)
+        result_code = Core.IV_setdigout(value)
+        PyviumVerifiers.verify_result_code(result_code, "set_digital_output")
 
     @staticmethod
     def get_digital_input() -> int:
@@ -217,7 +231,8 @@ class DirectModeFunctions():
         PyviumVerifiers.verify_driver_is_open()
         PyviumVerifiers.verify_iviumsoft_is_running()
         PyviumVerifiers.verify_device_is_connected_to_iviumsoft()
-        Core.IV_we32setchannel(channel_index)
+        result_code = Core.IV_we32setchannel(channel_index)
+        PyviumVerifiers.verify_result_code(result_code, "set_we32_channel")
 
     @staticmethod
     def set_we32_offset(channel_index: int, value: float):
@@ -226,7 +241,8 @@ class DirectModeFunctions():
         PyviumVerifiers.verify_driver_is_open()
         PyviumVerifiers.verify_iviumsoft_is_running()
         PyviumVerifiers.verify_device_is_connected_to_iviumsoft()
-        Core.IV_we32setoffset(channel_index, value)
+        result_code = Core.IV_we32setoffset(channel_index, value)
+        PyviumVerifiers.verify_result_code(result_code, "set_we32_offset")
 
     @staticmethod
     def set_we32_offsets(number_of_channels: int, values: list):
@@ -235,7 +251,8 @@ class DirectModeFunctions():
         PyviumVerifiers.verify_driver_is_open()
         PyviumVerifiers.verify_iviumsoft_is_running()
         PyviumVerifiers.verify_device_is_connected_to_iviumsoft()
-        Core.IV_we32setoffsets(number_of_channels, values)
+        result_code = Core.IV_we32setoffsets(number_of_channels, values)
+        PyviumVerifiers.verify_result_code(result_code, "set_we32_offsets")
 
     @staticmethod
     def get_we32_offsets(number_of_channels: int) -> list:
@@ -261,7 +278,8 @@ class DirectModeFunctions():
             instance: IviumSoft instance number; value in Ampere'''
         PyviumVerifiers.verify_driver_is_open()
         PyviumVerifiers.verify_iviumsoft_is_running()
-        Core.IV_selectdevicesetvalue(instance, 0, value)
+        result_code = Core.IV_selectdevicesetvalue(instance, 0, value)
+        PyviumVerifiers.verify_result_code(result_code, "set_device_current")
 
     @staticmethod
     def set_device_potential(instance: int, value: float):
@@ -269,20 +287,21 @@ class DirectModeFunctions():
             instance: IviumSoft instance number; value in Volt'''
         PyviumVerifiers.verify_driver_is_open()
         PyviumVerifiers.verify_iviumsoft_is_running()
-        Core.IV_selectdevicesetvalue(instance, 1, value)
+        result_code = Core.IV_selectdevicesetvalue(instance, 1, value)
+        PyviumVerifiers.verify_result_code(result_code, "set_device_potential")
 
     @staticmethod
     def set_ac_amplitude(ac_amplitude: float):
         '''Set the value of the ac amplitude in Volts'''
         PyviumVerifiers.verify_driver_is_open()
         PyviumVerifiers.verify_iviumsoft_is_running()
-
-        Core.IV_setamplitude(ac_amplitude)
+        result_code = Core.IV_setamplitude(ac_amplitude)
+        PyviumVerifiers.verify_result_code(result_code, "set_ac_amplitude")
 
     @staticmethod
     def set_ac_frequency(ac_frequency: float):
         '''Set the value of the ac frequency in Hz'''
         PyviumVerifiers.verify_driver_is_open()
         PyviumVerifiers.verify_iviumsoft_is_running()
-
-        Core.IV_setfrequency(ac_frequency)
+        result_code = Core.IV_setfrequency(ac_frequency)
+        PyviumVerifiers.verify_result_code(result_code, "set_ac_frequency")
