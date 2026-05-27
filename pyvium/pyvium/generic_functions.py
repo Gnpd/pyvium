@@ -188,12 +188,30 @@ class GenericFunctions():
     def select_serial_number(serial_number: str) -> int:
         '''Selects a device by serial number, making it ready to connect.
             Returns the position index in the dropdown list (0-based).
+            Warns if the requested device is already connected — skips reselection.
             Raises DeviceNotConnectedToIviumSoftError if the serial number is not
-            in the list or a device is already connected.'''
+            found in the device list, or if a different device is already connected.'''
         PyviumVerifiers.verify_driver_is_open()
         PyviumVerifiers.verify_iviumsoft_is_running()
+
+        if Core.IV_getdevicestatus() in (1, 2):
+            _, connected_serial = Core.IV_readSN()
+            if connected_serial == serial_number:
+                warnings.warn(
+                    f"select_serial_number('{serial_number}') called but this device "
+                    "is already connected — skipping.",
+                    UserWarning,
+                    stacklevel=2,
+                )
+                return 0  # index not meaningful; device is already active
+            raise DeviceNotConnectedToIviumSoftError(
+                f"Cannot select '{serial_number}': device '{connected_serial}' is already "
+                "connected. Call disconnect_device() first."
+            )
+
         result_code, _ = Core.IV_SelectSn(serial_number)
         if result_code == -1:
             raise DeviceNotConnectedToIviumSoftError(
-                f'Serial number {serial_number} not found in device list or a device is already connected')
+                f"Serial number '{serial_number}' not found in the device list."
+            )
         return result_code
