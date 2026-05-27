@@ -12,8 +12,11 @@ class MethodModeFunctions():
 
         result_code, _ = Core.IV_readmethod(method_file_path)
 
-        if result_code == 1:
-            raise FileNotFoundError
+        if result_code in (1, 2):
+            raise FileNotFoundError(
+                f"Method file not found or inaccessible: '{method_file_path}'. "
+                "Verify the path is absolute, the file exists, and has a .imf extension."
+            )
 
     @staticmethod
     def save_method(method_file_path: str):
@@ -37,8 +40,11 @@ class MethodModeFunctions():
 
         result_code, _ = Core.IV_startmethod(method_file_path)
 
-        if result_code == 1:
-            raise FileNotFoundError
+        if result_code in (1, 2):
+            raise FileNotFoundError(
+                f"Method file not found or inaccessible: '{method_file_path}'. "
+                "Verify the path is absolute, the file exists, and has a .imf extension."
+            )
 
     @staticmethod
     def abort_method():
