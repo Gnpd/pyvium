@@ -102,7 +102,8 @@ class GenericFunctions():
         PyviumVerifiers.verify_driver_is_open()
         PyviumVerifiers.verify_iviumsoft_is_running()
         PyviumVerifiers.verify_device_is_connected_to_computer()
-        Core.IV_connect(1)
+        result_code, _ = Core.IV_connect(1)
+        PyviumVerifiers.verify_result_code(result_code, context="connect_device")
 
     @staticmethod
     def disconnect_device():
@@ -110,7 +111,8 @@ class GenericFunctions():
         PyviumVerifiers.verify_driver_is_open()
         PyviumVerifiers.verify_iviumsoft_is_running()
         PyviumVerifiers.verify_device_is_connected_to_computer()
-        Core.IV_connect(0)
+        result_code, _ = Core.IV_connect(0)
+        PyviumVerifiers.verify_result_code(result_code, context="disconnect_device")
 
     @staticmethod
     def get_dll_version() -> int:
