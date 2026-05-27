@@ -1,3 +1,5 @@
+import warnings
+
 from ..core import Core
 from ..errors import (DeviceNotConnectedToIviumSoftError,
                       IviumSoftNotRunningError)
@@ -9,6 +11,11 @@ class GenericFunctions():
     def open_driver():
         '''Open the driver to manipulate the Ivium software'''
         if Core.is_driver_open():
+            warnings.warn(
+                "open_driver() called but driver is already open — closing and reopening",
+                UserWarning,
+                stacklevel=2,
+            )
             Core.IV_close()
         Core.IV_open()
         try:
@@ -102,6 +109,13 @@ class GenericFunctions():
         PyviumVerifiers.verify_driver_is_open()
         PyviumVerifiers.verify_iviumsoft_is_running()
         PyviumVerifiers.verify_device_is_connected_to_computer()
+        if Core.IV_getdevicestatus() in (1, 2):
+            warnings.warn(
+                "connect_device() called but device is already connected — skipping",
+                UserWarning,
+                stacklevel=2,
+            )
+            return
         result_code, _ = Core.IV_connect(1)
         PyviumVerifiers.verify_result_code(result_code, context="connect_device")
 
