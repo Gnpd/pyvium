@@ -58,11 +58,11 @@
 | :x: get_potential_trace(int, float)                     | :x: IV_getpotentialtrace(npoints, rate, values)                 |
 | :heavy_check_mark: set_device_current(int, float)       | :heavy_check_mark: IV_selectdevicesetvalue(int, int, float)     |
 | :heavy_check_mark: set_device_potential(int, float)     |                                                                 |
-| :heavy_check_mark: set_we32_channel(int)                | :heavy_check_mark: IV_we32setchannel(index)                     |
-| :heavy_check_mark: set_we32_offset(int, float)          | :heavy_check_mark: IV_we32setoffset(index, value)               |
-| :heavy_check_mark: set_we32_offsets(int, list)          | :heavy_check_mark: IV_we32setoffsets(nval, values)              |
-| :heavy_check_mark: get_we32_offsets(int)                | :heavy_check_mark: IV_we32getoffsets(nval, values)              |
-| :heavy_check_mark: read_we32_currents()                 | :heavy_check_mark: IV_we32readcurrents(values)                  |
+| :small_orange_diamond: set_we32_channel(int)            | :small_orange_diamond: IV_we32setchannel(index)                 |
+| :small_orange_diamond: set_we32_offset(int, float)      | :small_orange_diamond: IV_we32setoffset(index, value)           |
+| :small_orange_diamond: set_we32_offsets(int, list)      | :small_orange_diamond: IV_we32setoffsets(nval, values)          |
+| :small_orange_diamond: get_we32_offsets(int)            | :small_orange_diamond: IV_we32getoffsets(nval, values)          |
+| :small_orange_diamond: read_we32_currents()             | :small_orange_diamond: IV_we32readcurrents(values)              |
 
 ### Method Mode
 
