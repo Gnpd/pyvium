@@ -53,9 +53,9 @@
 | :heavy_check_mark: get_digital_input()                  | :heavy_check_mark: IV_getdigin(int)                             |
 | :heavy_check_mark: set_ac_frequency(float)              | :heavy_check_mark: IV_setfrequency(float)                       |
 | :heavy_check_mark: set_ac_amplitude(float)              | :heavy_check_mark: IV_setamplitude(float)                       |
-| :heavy_check_mark: get_current_trace(int, float)        | :heavy_check_mark: IV_getcurrenttrace(npoints, rate, values)    |
-| :heavy_check_mark: get_current_we2_trace(int, float)    | :heavy_check_mark: IV_getcurrentWE2trace(npoints, rate, values) |
-| :heavy_check_mark: get_potential_trace(int, float)      | :heavy_check_mark: IV_getpotentialtrace(npoints, rate, values)  |
+| :x: get_current_trace(int, float)                       | :x: IV_getcurrenttrace(npoints, rate, values)                   |
+| :x: get_current_we2_trace(int, float)                   | :x: IV_getcurrentWE2trace(npoints, rate, values)                |
+| :x: get_potential_trace(int, float)                     | :x: IV_getpotentialtrace(npoints, rate, values)                 |
 | :heavy_check_mark: set_device_current(int, float)       | :heavy_check_mark: IV_selectdevicesetvalue(int, int, float)     |
 | :heavy_check_mark: set_device_potential(int, float)     |                                                                 |
 | :heavy_check_mark: set_we32_channel(int)                | :heavy_check_mark: IV_we32setchannel(index)                     |
