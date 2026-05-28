@@ -12,8 +12,11 @@ class MethodModeFunctions():
 
         result_code, _ = Core.IV_readmethod(method_file_path)
 
-        if result_code == 1:
-            raise FileNotFoundError
+        if result_code in (1, 2):
+            raise FileNotFoundError(
+                f"Method file not found or inaccessible: '{method_file_path}'. "
+                "Verify the path is absolute, the file exists, and has a .imf extension."
+            )
 
     @staticmethod
     def save_method(method_file_path: str):
@@ -37,8 +40,11 @@ class MethodModeFunctions():
 
         result_code, _ = Core.IV_startmethod(method_file_path)
 
-        if result_code == 1:
-            raise FileNotFoundError
+        if result_code in (1, 2):
+            raise FileNotFoundError(
+                f"Method file not found or inaccessible: '{method_file_path}'. "
+                "Verify the path is absolute, the file exists, and has a .imf extension."
+            )
 
     @staticmethod
     def abort_method():
@@ -46,8 +52,8 @@ class MethodModeFunctions():
         PyviumVerifiers.verify_driver_is_open()
         PyviumVerifiers.verify_iviumsoft_is_running()
         PyviumVerifiers.verify_device_is_connected_to_iviumsoft()
-
-        Core.IV_abort()
+        result_code = Core.IV_abort()
+        PyviumVerifiers.verify_result_code(result_code, "abort_method")
 
     @staticmethod
     def save_data(data_file_path: str):
@@ -67,9 +73,8 @@ class MethodModeFunctions():
             It only works for text based parameters and dropdowns (multiple option selectors).'''
         PyviumVerifiers.verify_driver_is_open()
         PyviumVerifiers.verify_iviumsoft_is_running()
-
-        Core.IV_setmethodparameter(
-            parameter_name, parameter_value)
+        result_code = Core.IV_setmethodparameter(parameter_name, parameter_value)
+        PyviumVerifiers.verify_result_code(result_code, "set_method_parameter")
 
     @staticmethod
     def get_available_data_points_number():
@@ -108,7 +113,8 @@ class MethodModeFunctions():
             value in degrees Celsius'''
         PyviumVerifiers.verify_driver_is_open()
         PyviumVerifiers.verify_iviumsoft_is_running()
-        Core.IV_UpdateTemperature(value)
+        result_code, _ = Core.IV_UpdateTemperature(value)
+        PyviumVerifiers.verify_result_code(result_code, "update_temperature")
 
     @staticmethod
     def save_dataset(file_path: str):

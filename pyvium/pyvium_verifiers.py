@@ -1,6 +1,8 @@
 '''Class with methods to validated the current status of the IviumSoft environment'''
 from .core import Core
 from .errors import DriverNotOpenError, \
+    IllegalCommandError, \
+    InvalidStateError, \
     IviumSoftNotRunningError, \
     DeviceNotConnectedToIviumSoftError, \
     DeviceBusyError, \
@@ -53,3 +55,33 @@ class PyviumVerifiers:
         _, device_status = Core.IV_getcellstatus()
         if not device_status:
             raise CellOffError
+
+    @staticmethod
+    def verify_result_code(result_code: int, context: str = ""):
+        '''Raise a typed exception when a DLL setter returns a non-zero result code.
+
+        DLL result code semantics for setter functions:
+          0  — success (no exception raised)
+         -1  — no device: IviumSoft lost contact with the hardware
+          1  — illegal command: the command is not valid for this device
+          2  — argument out of range: a parameter value was rejected by the firmware
+          3  — invalid state: the command is valid but cannot run in the device's
+               current operating state (e.g. method already running)
+        '''
+        suffix = f": {context}" if context else ""
+        if result_code == -1:
+            raise NoDeviceDetectedError(
+                f"No device available during command{suffix}"
+            )
+        if result_code == 1:
+            raise IllegalCommandError(
+                f"The command is not available in the current device state{suffix}"
+            )
+        if result_code == 2:
+            raise ValueError(
+                f"Argument out of range{suffix}"
+            )
+        if result_code == 3:
+            raise InvalidStateError(
+                f"The device is in an invalid state for this command{suffix}"
+            )

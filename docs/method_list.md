@@ -24,7 +24,7 @@
 | :heavy_check_mark: check_dll_version()                  | :heavy_check_mark: IV_VersionCheck()       |
 | :heavy_check_mark: get_host_handle()                    | :heavy_check_mark: IV_HostHandle()         |
 | :heavy_check_mark: get_iviumsoft_version()              | :heavy_check_mark: IV_VersionDllFile()     |
-| :heavy_check_mark: get_dll_version_string()             | :heavy_check_mark: IV_VersionDllFileStr()  |
+| :heavy_check_mark: get_dll_version_string()             | :x: IV_VersionDllFileStr()  |
 | :heavy_check_mark: select_channel(int)                  | :heavy_check_mark: IV_SelectChannel(int)   |
 
 ### Direct Mode
@@ -53,16 +53,16 @@
 | :heavy_check_mark: get_digital_input()                  | :heavy_check_mark: IV_getdigin(int)                             |
 | :heavy_check_mark: set_ac_frequency(float)              | :heavy_check_mark: IV_setfrequency(float)                       |
 | :heavy_check_mark: set_ac_amplitude(float)              | :heavy_check_mark: IV_setamplitude(float)                       |
-| :heavy_check_mark: get_current_trace(int, float)        | :heavy_check_mark: IV_getcurrenttrace(npoints, rate, values)    |
-| :heavy_check_mark: get_current_we2_trace(int, float)    | :heavy_check_mark: IV_getcurrentWE2trace(npoints, rate, values) |
-| :heavy_check_mark: get_potential_trace(int, float)      | :heavy_check_mark: IV_getpotentialtrace(npoints, rate, values)  |
+| :x: get_current_trace(int, float)                       | :x: IV_getcurrenttrace(npoints, rate, values)                   |
+| :x: get_current_we2_trace(int, float)                   | :x: IV_getcurrentWE2trace(npoints, rate, values)                |
+| :x: get_potential_trace(int, float)                     | :x: IV_getpotentialtrace(npoints, rate, values)                 |
 | :heavy_check_mark: set_device_current(int, float)       | :heavy_check_mark: IV_selectdevicesetvalue(int, int, float)     |
 | :heavy_check_mark: set_device_potential(int, float)     |                                                                 |
-| :heavy_check_mark: set_we32_channel(int)                | :heavy_check_mark: IV_we32setchannel(index)                     |
-| :heavy_check_mark: set_we32_offset(int, float)          | :heavy_check_mark: IV_we32setoffset(index, value)               |
-| :heavy_check_mark: set_we32_offsets(int, list)          | :heavy_check_mark: IV_we32setoffsets(nval, values)              |
-| :heavy_check_mark: get_we32_offsets(int)                | :heavy_check_mark: IV_we32getoffsets(nval, values)              |
-| :heavy_check_mark: read_we32_currents()                 | :heavy_check_mark: IV_we32readcurrents(values)                  |
+| :small_orange_diamond: set_we32_channel(int)            | :small_orange_diamond: IV_we32setchannel(index)                 |
+| :small_orange_diamond: set_we32_offset(int, float)      | :small_orange_diamond: IV_we32setoffset(index, value)           |
+| :small_orange_diamond: set_we32_offsets(int, list)      | :small_orange_diamond: IV_we32setoffsets(nval, values)          |
+| :small_orange_diamond: get_we32_offsets(int)            | :small_orange_diamond: IV_we32getoffsets(nval, values)          |
+| :small_orange_diamond: read_we32_currents()             | :small_orange_diamond: IV_we32readcurrents(values)              |
 
 ### Method Mode
 
