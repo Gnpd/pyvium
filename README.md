@@ -16,6 +16,7 @@ PYVIUM provides both:
 - Exception management
 - Data processing tools
 - Batch conversion utilities
+- Batch mode synchronization
 
 ---
 
@@ -62,7 +63,7 @@ Core.IV_close()
 
 This is a wrapper around the Core functions that adds a few things:
 
-- Exception management (you can find an example [here](https://github.com/SF-Tec/pyvium/blob/main/docs/error_management.md))
+- Exception management (you can find an example [here](https://github.com/Gnpd/pyvium/blob/main/docs/error_management.md))
 - Cleaner syntax
 - Additional functionality
 
@@ -86,9 +87,27 @@ Tools.convert_idf_dir_to_csv()
 
 ```
 
+## Examples & Notebooks
+
+A series of Jupyter notebooks covers the full API:
+
+| Notebook | Topic |
+|---|---|
+| `01_getting_started` | Installation, driver lifecycle, error handling |
+| `02_device_and_instance_management` | Connecting devices, switching instances |
+| `03_direct_mode_basics` | Potential/current control, cell on/off |
+| `04_direct_mode_signals` | DAC/ADC, digital I/O, AC signal |
+| `05_bipotentiostat_and_we32` | BiStat WE2 and 32-channel WE32 array |
+| `06_method_mode` | Load, run, monitor, and save experiments |
+| `07_data_processing` | Parse IDF files, export to CSV (no hardware needed) |
+| `08_batch_and_synchronization` | Multi-device setpoints and parallel runs |
+| `09_trigger_reference` | Python–IviumSoft trigger mechanisms |
+
+Browse them in the [`notebooks/`](https://github.com/Gnpd/pyvium/tree/main/notebooks) directory.
+
 ## Implemented functions
 
-The list of currently implemented functions can be found [here](https://github.com/SF-Tec/pyvium/blob/main/docs/method_list.md).
+The list of currently implemented functions can be found [here](https://github.com/Gnpd/pyvium/blob/main/docs/method_list.md).
 
 ## Support and Consulting
 
@@ -106,5 +125,5 @@ Sponsors receive priority support and help drive future development.
 
 ## Links
 
-- [See on GitHub](https://github.com/sf-tec/pyvium)
+- [See on GitHub](https://github.com/Gnpd/pyvium)
 - [See on PyPI](https://pypi.org/project/pyvium)
