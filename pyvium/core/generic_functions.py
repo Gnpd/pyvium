@@ -26,14 +26,16 @@ class GenericFunctions(CoreBase):
     @staticmethod
     def IV_open() -> int:
         """Open the driver to manipulate the Ivium software"""
+        result = CoreBase.get_lib().IV_open()
         CoreBase.set_driver_open(True)
-        return CoreBase.get_lib().IV_open()
+        return result
 
     @staticmethod
     def IV_close() -> int:
         """Closes the iviumSoft driver"""
+        result = CoreBase.get_lib().IV_close()
         CoreBase.set_driver_open(False)
-        return CoreBase.get_lib().IV_close()
+        return result
 
     @staticmethod
     def IV_MaxDevices() -> int:

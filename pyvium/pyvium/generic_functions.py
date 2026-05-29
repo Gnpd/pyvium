@@ -27,7 +27,8 @@ class GenericFunctions():
     @staticmethod
     def close_driver():
         '''Closes the iviumSoft driver'''
-        PyviumVerifiers.verify_driver_is_open()
+        if not Core.is_driver_open():
+            return
         Core.IV_close()
 
     @staticmethod
