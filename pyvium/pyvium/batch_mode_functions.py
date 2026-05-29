@@ -8,7 +8,8 @@ class BatchModeFunctions():
         '''Sets the global Statuspar variable, can be used for synchronisation.'''
         PyviumVerifiers.verify_driver_is_open()
         PyviumVerifiers.verify_iviumsoft_is_running()
-        Core.IV_StatusParSet(value)
+        result_code, _ = Core.IV_StatusParSet(value)
+        PyviumVerifiers.verify_result_code(result_code, "set_status_par")
 
     @staticmethod
     def get_status_par() -> int:

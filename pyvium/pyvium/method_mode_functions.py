@@ -25,7 +25,8 @@ class MethodModeFunctions():
         PyviumVerifiers.verify_driver_is_open()
         PyviumVerifiers.verify_iviumsoft_is_running()
 
-        Core.IV_savemethod(method_file_path)
+        result_code, _ = Core.IV_savemethod(method_file_path)
+        PyviumVerifiers.verify_result_code(result_code, "save_method")
 
     @staticmethod
     def start_method(method_file_path=''):
@@ -65,7 +66,8 @@ class MethodModeFunctions():
         PyviumVerifiers.verify_driver_is_open()
         PyviumVerifiers.verify_iviumsoft_is_running()
 
-        Core.IV_savedata(data_file_path)
+        result_code, _ = Core.IV_savedata(data_file_path)
+        PyviumVerifiers.verify_result_code(result_code, "save_data")
 
     @staticmethod
     def set_method_parameter(parameter_name: str, parameter_value: str):
@@ -122,7 +124,8 @@ class MethodModeFunctions():
             file_path represents the full path to the new file.'''
         PyviumVerifiers.verify_driver_is_open()
         PyviumVerifiers.verify_iviumsoft_is_running()
-        Core.IV_savedataset(file_path)
+        result_code, _ = Core.IV_savedataset(file_path)
+        PyviumVerifiers.verify_result_code(result_code, "save_dataset")
 
     @staticmethod
     def get_data_point_from_scan(data_point_index: int, scan_index: int):
