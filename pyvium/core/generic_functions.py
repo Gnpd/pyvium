@@ -119,7 +119,7 @@ class GenericFunctions(CoreBase):
         return CoreBase.get_lib().IV_SelectChannel(channel_number_ptr)
 
     @staticmethod
-    def IV_SelectSn(serial_number: str) -> tuple[int, str]:
+    def IV_SelectSn(serial_number: str) -> int:
         """Selects device by serial number from the list of available devices to connect"""
         serial_number_ptr = ffi.new(CHAR_ARRAY, serial_number.encode(UTF_ENCODING))
         return CoreBase.get_lib().IV_SelectSn(serial_number_ptr)
