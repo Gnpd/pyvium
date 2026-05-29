@@ -11,7 +11,8 @@ class DirectModeFunctions():
         PyviumVerifiers.verify_driver_is_open()
         PyviumVerifiers.verify_iviumsoft_is_running()
         PyviumVerifiers.verify_device_is_connected_to_iviumsoft()
-        _, cell_status_bits = Core.IV_getcellstatus()
+        result_code, cell_status_bits = Core.IV_getcellstatus()
+        PyviumVerifiers.verify_result_code(result_code, "get_cell_status")
         cell_status_labels = []
 
         labels = ["I_ovl", "", "Anin1_ovl", "E_ovl",
