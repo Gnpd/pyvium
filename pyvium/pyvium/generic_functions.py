@@ -186,9 +186,10 @@ class GenericFunctions():
         Core.IV_SelectChannel(channel_number)
 
     @staticmethod
-    def select_serial_number(serial_number: str) -> int:
+    def select_serial_number(serial_number: str) -> int | None:
         '''Selects a device by serial number, making it ready to connect.
-            Returns the position index in the dropdown list (0-based).
+            Returns the position index in the dropdown list (0-based), or None if
+            the device is already connected and no reselection was needed.
             Warns if the requested device is already connected — skips reselection.
             Raises DeviceNotConnectedToIviumSoftError if the serial number is not
             found in the device list, or if a different device is already connected.'''
@@ -204,15 +205,15 @@ class GenericFunctions():
                     UserWarning,
                     stacklevel=2,
                 )
-                return 0  # index not meaningful; device is already active
+                return None  # device already active, no selection performed
             raise DeviceNotConnectedToIviumSoftError(
                 f"Cannot select '{serial_number}': device '{connected_serial}' is already "
                 "connected. Call disconnect_device() first."
             )
 
-        result_code, _ = Core.IV_SelectSn(serial_number)
-        if result_code == -1:
+        device_index = Core.IV_SelectSn(serial_number)
+        if device_index == -1:
             raise DeviceNotConnectedToIviumSoftError(
-                f"Serial number '{serial_number}' not found in the device list."
+                f"Serial number '{serial_number}' not found in the available device list."
             )
-        return result_code
+        return device_index

@@ -116,13 +116,11 @@ class GenericFunctions(CoreBase):
         If no instrument is connected, the next available instrument in the list can
         be connected (IV_connect) and controlled."""
         channel_number_ptr = ffi.new(LONG_PTR, channel_number)
-        result_code = CoreBase.get_lib().IV_SelectChannel(channel_number_ptr)
-        return result_code
+        return CoreBase.get_lib().IV_SelectChannel(channel_number_ptr)
 
     @staticmethod
     def IV_SelectSn(serial_number: str) -> tuple[int, str]:
         """Selects device by serial number from the list of available devices to connect"""
         serial_number_ptr = ffi.new(CHAR_ARRAY, serial_number.encode(UTF_ENCODING))
-        result_code = CoreBase.get_lib().IV_SelectSn(serial_number_ptr)
-        return result_code, ffi.string(serial_number_ptr).decode(UTF_ENCODING)
+        return CoreBase.get_lib().IV_SelectSn(serial_number_ptr)
 
