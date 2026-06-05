@@ -75,6 +75,7 @@ class MethodModeFunctions():
             It only works for text based parameters and dropdowns (multiple option selectors).'''
         PyviumVerifiers.verify_driver_is_open()
         PyviumVerifiers.verify_iviumsoft_is_running()
+        PyviumVerifiers.verify_device_is_connected_to_iviumsoft()
         result_code = Core.IV_setmethodparameter(parameter_name, parameter_value)
         PyviumVerifiers.verify_result_code(result_code, "set_method_parameter")
 
