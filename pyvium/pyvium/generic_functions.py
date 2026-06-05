@@ -163,13 +163,9 @@ class GenericFunctions():
 
     @staticmethod
     def get_dll_version_string() -> str:
-        '''Returns the DLL version as a formatted string (e.g. "4.1221").
-
-        Note: IV_VersionDllFileStr writes binary data rather than a readable
-        string, so this method derives the string from IV_VersionDll() instead.
-        '''
+        '''Returns the DLL version as a formatted string (e.g. "4.123910334").'''
         PyviumVerifiers.verify_driver_is_open()
-        return str(Core.IV_VersionDll())
+        return Core.IV_VersionDllFileStr()
 
     @staticmethod
     def select_channel(channel_number: int):

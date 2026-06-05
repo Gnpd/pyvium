@@ -15,7 +15,7 @@ ffi.cdef(
     long __stdcall IV_VersionCheck();
     long __stdcall IV_HostHandle();
     long __stdcall IV_VersionDllFile();
-    long __stdcall IV_VersionDllFileStr(char *version);
+    void __stdcall IV_VersionDllFileStr(char **result);
     long __stdcall IV_SelectChannel(long *channel);
     long __stdcall IV_SelectSn(char *sntext);
 """
@@ -96,15 +96,14 @@ class GenericFunctions(CoreBase):
         return CoreBase.get_lib().IV_VersionDllFile()
 
     @staticmethod
-    def IV_VersionDllFileStr() -> tuple[int, str]:
-        """Returns the DLL build number as a string (e.g. '4.1221').
-
-        The DLL may pad the buffer with non-ASCII bytes beyond the null terminator,
-        so the raw bytes are decoded as ASCII with non-ASCII bytes silently dropped.
-        """
-        version_ptr = ffi.new(CHAR_ARRAY, 64)
-        result_code = CoreBase.get_lib().IV_VersionDllFileStr(version_ptr)
-        return result_code, ffi.string(version_ptr).decode("ascii", errors="ignore")
+    def IV_VersionDllFileStr() -> str:
+        """Returns the DLL file version as a string (e.g. '4.123910334')."""
+        result_holder = ffi.new("char *[1]")  # char **result, initialized to NULL
+        CoreBase.get_lib().IV_VersionDllFileStr(result_holder)
+        if result_holder[0] == ffi.NULL:
+            return ""
+        return ffi.string(result_holder[0]).decode("ascii", errors="ignore")
+    
 
     @staticmethod
     def IV_SelectChannel(channel_number: int) -> int:
