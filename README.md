@@ -1,6 +1,6 @@
 # PYVIUM
 
-[English](./README.md) · [中文](./README.zh.md)
+[中文](./README.zh.md) | [Español](./README.es.md) | English
 
 Python wrapper for the IviumSoft driver DLL, enabling control of Ivium potentiostats and data processing directly from Python.
 

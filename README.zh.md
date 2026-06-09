@@ -1,6 +1,6 @@
 # PYVIUM
 
-[English](./README.md) · [中文](./README.zh.md)
+[English](./README.md) | [Español](./README.es.md) | 中文
 
 IviumSoft 驱动 DLL 的 Python 封装，支持直接通过 Python 控制 Ivium 恒电位仪并处理实验数据。
 
