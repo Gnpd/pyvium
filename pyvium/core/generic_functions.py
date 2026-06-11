@@ -47,6 +47,7 @@ class GenericFunctions(CoreBase):
         """It allows to select one instance of the currently running IviumSoft instances"""
         instance_number_ptr = ffi.new(LONG_PTR, iviumsoft_instance_number)
         CoreBase.get_lib().IV_selectdevice(instance_number_ptr)
+        CoreBase.set_selected_instance(iviumsoft_instance_number)
 
     @staticmethod
     def IV_getdevicestatus() -> int:

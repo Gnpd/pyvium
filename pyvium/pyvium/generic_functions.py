@@ -1,4 +1,5 @@
 import warnings
+from contextlib import contextmanager
 
 from ..core import Core
 from ..errors import (DeviceNotConnectedToIviumSoftError,
@@ -61,36 +62,63 @@ class GenericFunctions():
 
     @staticmethod
     def get_active_iviumsoft_instances():
-        '''Returns a list of active(open) IviumSoft instances'''
+        '''Returns a list of active(open) IviumSoft instances.
+
+            The scan changes the selected instance while it runs, so it holds
+            the driver lock and restores the previous selection afterwards.'''
         PyviumVerifiers.verify_driver_is_open()
         active_instances = []
-        first_active_instance_number = 0
-        for instance_number in range(1, 33):
-            Core.IV_selectdevice(instance_number)
+        with Core.get_lock():
+            previous_instance = Core.get_selected_instance()
+            try:
+                for instance_number in range(1, 33):
+                    Core.IV_selectdevice(instance_number)
 
-            if Core.IV_getdevicestatus() != -1:
-                active_instances.append(instance_number)
-
-                if first_active_instance_number == 0:
-                    first_active_instance_number = instance_number
-
-        if first_active_instance_number == 0:
-            first_active_instance_number = 1
-
-        Core.IV_selectdevice(first_active_instance_number)
+                    if Core.IV_getdevicestatus() != -1:
+                        active_instances.append(instance_number)
+            finally:
+                Core.IV_selectdevice(previous_instance)
         return active_instances
+
+    @staticmethod
+    @contextmanager
+    def on_instance(iviumsoft_instance_number: int):
+        '''Context manager that runs a block of commands on a given IviumSoft
+            instance atomically.
+
+            Acquires the process-wide driver lock, selects the instance, runs
+            the block, and restores the previously selected instance — even if
+            the block raises. While the block runs, no other thread can issue
+            DLL commands, so the selection cannot change underneath it:
+
+                with Pyvium.on_instance(3):
+                    Pyvium.connect_device()
+                    Pyvium.start_method('cv.imf')
+
+            Note: this does not verify the instance is running (that scan is
+            expensive); commands inside the block raise IviumSoftNotRunningError
+            through the verifiers if it is not.'''
+        PyviumVerifiers.verify_driver_is_open()
+        with Core.get_lock():
+            previous_instance = Core.get_selected_instance()
+            Core.IV_selectdevice(iviumsoft_instance_number)
+            try:
+                yield
+            finally:
+                Core.IV_selectdevice(previous_instance)
 
     @staticmethod
     def select_iviumsoft_instance(iviumsoft_instance_number: int):
         '''It allows to select one instance of the currently running IviumSoft instances'''
 
         PyviumVerifiers.verify_driver_is_open()
-        active_instances = GenericFunctions.get_active_iviumsoft_instances()
-        if iviumsoft_instance_number not in active_instances:
-            error_msg = 'No IviumSoft on instance number {}, actual active instances list = {}'
-            raise IviumSoftNotRunningError(error_msg.format(
-                iviumsoft_instance_number, active_instances))
-        Core.IV_selectdevice(iviumsoft_instance_number)
+        with Core.get_lock():
+            active_instances = GenericFunctions.get_active_iviumsoft_instances()
+            if iviumsoft_instance_number not in active_instances:
+                error_msg = 'No IviumSoft on instance number {}, actual active instances list = {}'
+                raise IviumSoftNotRunningError(error_msg.format(
+                    iviumsoft_instance_number, active_instances))
+            Core.IV_selectdevice(iviumsoft_instance_number)
 
     @staticmethod
     def get_device_serial_number():
