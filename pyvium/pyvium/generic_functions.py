@@ -9,8 +9,13 @@ from ..pyvium_verifiers import PyviumVerifiers
 
 class GenericFunctions():
     @staticmethod
-    def open_driver():
-        '''Open the driver to manipulate the Ivium software'''
+    def open_driver(verify_iviumsoft: bool = True):
+        '''Open the driver to manipulate the Ivium software.
+
+            verify_iviumsoft=False skips the check that an IviumSoft instance
+            is running, allowing a cold start where instances are launched
+            afterwards (e.g. via IviumsoftInstanceManager). Every subsequent
+            command still verifies IviumSoft on its own.'''
         if Core.is_driver_open():
             warnings.warn(
                 "open_driver() called but driver is already open — closing and reopening",
@@ -19,6 +24,8 @@ class GenericFunctions():
             )
             Core.IV_close()
         Core.IV_open()
+        if not verify_iviumsoft:
+            return
         try:
             PyviumVerifiers.verify_iviumsoft_is_running()
         except:

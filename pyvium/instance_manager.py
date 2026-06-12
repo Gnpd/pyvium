@@ -2,7 +2,8 @@
 
 Opens, tracks, adopts and gracefully closes IviumSoft processes, mapping
 each one to the driver instance number it registered with. The driver must
-already be open (Pyvium.open_driver()) for any operation that talks to it.
+already be open for any operation that talks to it — on a cold start with
+no IviumSoft running yet, use Pyvium.open_driver(verify_iviumsoft=False).
 '''
 import subprocess
 import threading

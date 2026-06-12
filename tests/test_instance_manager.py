@@ -151,6 +151,16 @@ def test_launch_attributes_new_instance_number(world):
     assert record.launched_at is not None
 
 
+def test_launch_cold_start_with_no_running_instances(world):
+    world.lib.active_instances.clear()  # nothing running yet
+    manager = make_manager()
+
+    record = manager.launch()
+
+    assert record.instance_number == 1
+    assert record.managed is True
+
+
 def test_launch_waits_for_delayed_registration(world):
     world.register_on_launch = False
     world.registration_delay = 0.1

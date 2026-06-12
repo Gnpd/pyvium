@@ -10,7 +10,7 @@ import pytest
 from pyvium import Pyvium
 from pyvium.core import Core
 from pyvium.core.core_base import CoreBase
-from pyvium.errors import DriverNotOpenError
+from pyvium.errors import DriverNotOpenError, IviumSoftNotRunningError
 from pyvium.pyvium.device import PyviumDevice
 
 
@@ -23,6 +23,14 @@ class FakeIviumLib:
         self.selected = 1
         self.calls = []
         self.call_delay = 0.0
+
+    def IV_open(self):
+        self.calls.append(('IV_open', self.selected))
+        return 0
+
+    def IV_close(self):
+        self.calls.append(('IV_close', self.selected))
+        return 0
 
     def IV_selectdevice(self, instance_number_ptr):
         self.selected = instance_number_ptr[0]
@@ -44,6 +52,34 @@ def fake_lib(monkeypatch):
     yield fake
     CoreBase.set_driver_open(False)
     CoreBase.set_selected_instance(1)
+
+
+@pytest.fixture
+def cold_lib(monkeypatch):
+    '''Driver closed, zero IviumSoft instances running — the cold-start case.'''
+    fake = FakeIviumLib(active_instances=())
+    monkeypatch.setattr(CoreBase, 'get_lib', staticmethod(lambda: fake))
+    CoreBase.set_driver_open(False)
+    CoreBase.set_selected_instance(1)
+    yield fake
+    CoreBase.set_driver_open(False)
+    CoreBase.set_selected_instance(1)
+
+
+def test_open_driver_raises_and_closes_when_no_iviumsoft(cold_lib):
+    with pytest.raises(IviumSoftNotRunningError):
+        Pyvium.open_driver()
+    assert not Core.is_driver_open()
+
+
+def test_open_driver_cold_start_skips_iviumsoft_check(cold_lib):
+    Pyvium.open_driver(verify_iviumsoft=False)
+
+    assert Core.is_driver_open()
+    assert Pyvium.get_active_iviumsoft_instances() == []
+
+    Pyvium.close_driver()
+    assert not Core.is_driver_open()
 
 
 def test_on_instance_selects_then_restores(fake_lib):
