@@ -4,6 +4,7 @@ The DLL is replaced by the in-memory fake from test_instance_scoping, and the
 OS layer (process spawn, window close, process queries) by a FakeWorld, so the
 full lifecycle state machine runs without IviumSoft or hardware.'''
 import threading
+from datetime import datetime
 
 import pytest
 
@@ -61,6 +62,9 @@ class FakeWorld:
         self.launched = []
         self.close_requests = []
         self.terminated_pids = []
+        self.creation_times = {}         # pid -> datetime
+        self.window_titles = {}          # pid -> str
+        self.external_instances = {}     # external pid -> instance number
         self.register_on_launch = True   # instance registers instantly
         self.registration_delay = None   # seconds; None = never (if not instant)
         self.exit_code_on_launch = None  # process dies right away with this code
@@ -70,6 +74,7 @@ class FakeWorld:
         process = FakeProcess(self)
         self.launched.append(process)
         self.alive_pids.add(process.pid)
+        self.creation_times[process.pid] = datetime.now()
         if self.exit_code_on_launch is not None:
             self.exit_pid(process.pid, self.exit_code_on_launch)
         elif self.register_on_launch:
@@ -83,6 +88,17 @@ class FakeWorld:
         process.instance_number = max(self.lib.active_instances, default=0) + 1
         self.lib.active_instances.add(process.instance_number)
 
+    def spawn_external(self, pid, instance_number=None, title=None,
+                       started_at=None):
+        '''An IviumSoft process this manager never launched (an orphan).'''
+        self.alive_pids.add(pid)
+        self.creation_times[pid] = started_at or datetime.now()
+        if title is not None:
+            self.window_titles[pid] = title
+        if instance_number is not None:
+            self.lib.active_instances.add(instance_number)
+            self.external_instances[pid] = instance_number
+
     def exit_pid(self, pid, exit_code):
         self.alive_pids.discard(pid)
         for process in self.launched:
@@ -90,6 +106,9 @@ class FakeWorld:
                 process.returncode = exit_code
                 if process.instance_number is not None:
                     self.lib.active_instances.discard(process.instance_number)
+        external_instance = self.external_instances.pop(pid, None)
+        if external_instance is not None:
+            self.lib.active_instances.discard(external_instance)
 
     # --- windows_process replacements ---
 
@@ -107,6 +126,15 @@ class FakeWorld:
         self.terminated_pids.append(pid)
         self.exit_pid(pid, exit_code=1)
         return True
+
+    def find_pids_by_exe(self, _exe_path):
+        return sorted(self.alive_pids)
+
+    def get_process_creation_time(self, pid):
+        return self.creation_times.get(pid)
+
+    def get_main_window_title(self, pid):
+        return self.window_titles.get(pid)
 
 
 @pytest.fixture
@@ -126,6 +154,12 @@ def world(monkeypatch):
                         fake_world.is_process_running)
     monkeypatch.setattr(windows_process, 'terminate_process',
                         fake_world.terminate_process)
+    monkeypatch.setattr(windows_process, 'find_pids_by_exe',
+                        fake_world.find_pids_by_exe)
+    monkeypatch.setattr(windows_process, 'get_process_creation_time',
+                        fake_world.get_process_creation_time)
+    monkeypatch.setattr(windows_process, 'get_main_window_title',
+                        fake_world.get_main_window_title)
 
     yield fake_world
 
@@ -278,3 +312,88 @@ def test_list_instances_prunes_dead_records(world):
 
     numbers = [item.instance_number for item in manager.list_instances()]
     assert numbers == [1]
+
+
+def test_discover_groups_tracked_orphans_and_untracked(world):
+    manager = make_manager()
+    record = manager.launch()  # instance 2, tracked
+    world.spawn_external(9001, instance_number=4, title='IviumSoft')
+
+    report = manager.discover()
+
+    assert [item.instance_number for item in report.tracked] == [2]
+    assert report.tracked[0].pid == record.pid
+    assert report.orphan_instance_numbers == [1, 4]
+    assert [process.pid for process in report.untracked_processes] == [9001]
+    untracked = report.untracked_processes[0]
+    assert untracked.window_title == 'IviumSoft'
+    assert untracked.started_at is not None
+
+
+def test_discover_sorts_untracked_by_start_time(world):
+    manager = make_manager()
+    world.spawn_external(9002, started_at=datetime(2026, 1, 1, 10, 5))
+    world.spawn_external(9001, started_at=datetime(2026, 1, 1, 10, 0))
+
+    report = manager.discover()
+
+    assert [process.pid for process in report.untracked_processes] == [9001, 9002]
+
+
+def test_discover_is_read_only(world):
+    manager = make_manager()
+    record = manager.launch()
+    world.exit_pid(record.pid, exit_code=0)  # died externally
+
+    report = manager.discover()
+
+    assert [item.instance_number for item in report.tracked] == [2]
+    # list_instances, by contrast, prunes the dead record
+    assert record.instance_number not in [
+        item.instance_number for item in manager.list_instances()]
+
+
+def test_close_orphans_closes_only_untracked(world):
+    manager = make_manager()
+    record = manager.launch()
+    world.spawn_external(9001, instance_number=4)
+
+    closed = manager.close_orphans()
+
+    assert closed == [9001]
+    assert world.close_requests == [9001]
+    assert record.pid in world.alive_pids  # managed instance untouched
+    assert 4 not in world.lib.active_instances
+
+
+def test_close_orphans_refuses_when_any_orphan_is_busy(world):
+    manager = make_manager()
+    world.spawn_external(9001, instance_number=4)
+    world.lib.busy_instances.add(4)
+
+    with pytest.raises(DeviceBusyError):
+        manager.close_orphans()
+    assert world.close_requests == []  # all-or-nothing: nothing closed
+
+    closed = manager.close_orphans(force=True)
+    assert closed == [9001]
+
+
+def test_close_orphans_escalates_when_close_is_ignored(world):
+    world.honour_close = False
+    manager = make_manager()
+    world.spawn_external(9001, instance_number=4)
+
+    with pytest.warns(UserWarning, match='terminating'):
+        closed = manager.close_orphans()
+
+    assert closed == [9001]
+    assert world.terminated_pids == [9001]
+
+
+def test_close_orphans_with_nothing_untracked(world):
+    manager = make_manager()
+    manager.launch()
+
+    # instance 1 is an orphan number, but no untracked process is visible
+    assert manager.close_orphans() == []

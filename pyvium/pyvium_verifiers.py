@@ -61,11 +61,11 @@ class PyviumVerifiers:
         '''Raise a typed exception when a DLL setter returns a non-zero result code.
 
         DLL result code semantics for setter functions:
-          0  — success (no exception raised)
-         -1  — no device: IviumSoft lost contact with the hardware
-          1  — illegal command: the command is not valid for this device
-          2  — argument out of range: a parameter value was rejected by the firmware
-          3  — invalid state: the command is valid but cannot run in the device's
+          0  = success (no exception raised)
+         -1  = no device: IviumSoft lost contact with the hardware
+          1  = illegal command: the command is not valid for this device
+          2  = argument out of range: a parameter value was rejected by the firmware
+          3  = invalid state: the command is valid but cannot run in the device's
                current operating state (e.g. method already running)
         '''
         suffix = f": {context}" if context else ""

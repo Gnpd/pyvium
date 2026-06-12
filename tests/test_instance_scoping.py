@@ -56,7 +56,7 @@ def fake_lib(monkeypatch):
 
 @pytest.fixture
 def cold_lib(monkeypatch):
-    '''Driver closed, zero IviumSoft instances running — the cold-start case.'''
+    '''Driver closed, zero IviumSoft instances running, the cold-start case.'''
     fake = FakeIviumLib(active_instances=())
     monkeypatch.setattr(CoreBase, 'get_lib', staticmethod(lambda: fake))
     CoreBase.set_driver_open(False)

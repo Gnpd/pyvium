@@ -18,7 +18,7 @@ class GenericFunctions():
             command still verifies IviumSoft on its own.'''
         if Core.is_driver_open():
             warnings.warn(
-                "open_driver() called but driver is already open — closing and reopening",
+                "open_driver() called but driver is already open, closing and reopening",
                 UserWarning,
                 stacklevel=2,
             )
@@ -94,7 +94,7 @@ class GenericFunctions():
             instance atomically.
 
             Acquires the process-wide driver lock, selects the instance, runs
-            the block, and restores the previously selected instance — even if
+            the block, and restores the previously selected instance, even if
             the block raises. While the block runs, no other thread can issue
             DLL commands, so the selection cannot change underneath it:
 
@@ -147,7 +147,7 @@ class GenericFunctions():
         PyviumVerifiers.verify_device_is_connected_to_computer()
         if Core.IV_getdevicestatus() in (1, 2):
             warnings.warn(
-                "connect_device() called but device is already connected — skipping",
+                "connect_device() called but device is already connected, skipping",
                 UserWarning,
                 stacklevel=2,
             )
@@ -221,7 +221,7 @@ class GenericFunctions():
         '''Selects a device by serial number, making it ready to connect.
             Returns the position index in the dropdown list (0-based), or None if
             the device is already connected and no reselection was needed.
-            Warns if the requested device is already connected — skips reselection.
+            Warns if the requested device is already connected, skips reselection.
             Raises DeviceNotConnectedToIviumSoftError if the serial number is not
             found in the device list, or if a different device is already connected.'''
         PyviumVerifiers.verify_driver_is_open()
@@ -232,7 +232,7 @@ class GenericFunctions():
             if connected_serial == serial_number:
                 warnings.warn(
                     f"select_serial_number('{serial_number}') called but this device "
-                    "is already connected — skipping.",
+                    "is already connected, skipping.",
                     UserWarning,
                     stacklevel=2,
                 )

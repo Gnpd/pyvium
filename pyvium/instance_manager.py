@@ -2,7 +2,7 @@
 
 Opens, tracks, adopts and gracefully closes IviumSoft processes, mapping
 each one to the driver instance number it registered with. The driver must
-already be open for any operation that talks to it — on a cold start with
+already be open for any operation that talks to it; on a cold start with
 no IviumSoft running yet, use Pyvium.open_driver(verify_iviumsoft=False).
 '''
 import subprocess
@@ -45,6 +45,31 @@ class ManagedInstance:
     launched_at: datetime | None
     managed: bool
     process: subprocess.Popen | None = field(default=None, repr=False)
+
+
+@dataclass
+class UntrackedProcess:
+    '''An IviumSoft process found on the machine that no manager record
+        covers. started_at and window_title are best-effort aids for pairing
+        it with an orphan driver instance number by hand: launch order
+        matches the driver's sequential numbering.'''
+    pid: int
+    started_at: datetime | None
+    window_title: str | None
+
+
+@dataclass
+class DiscoveryReport:
+    '''Snapshot pairing the driver's view of IviumSoft with the OS's view.
+
+        tracked instances connect both views (instance number and pid);
+        orphan_instance_numbers (driver side) and untracked_processes (OS
+        side) are the two halves the manager cannot pair automatically. In
+        a healthy state their counts match; a mismatch usually means a
+        process still starting up or one that died without deregistering.'''
+    tracked: list[ManagedInstance]
+    orphan_instance_numbers: list[int]
+    untracked_processes: list[UntrackedProcess]
 
 
 class IviumsoftInstanceManager:
@@ -114,7 +139,7 @@ class IviumsoftInstanceManager:
             to a hard terminate if the process does not exit in time.
 
             Refuses to close a measuring instance unless force=True.
-            Raises ValueError for instances without a known pid — adopt()
+            Raises ValueError for instances without a known pid; adopt()
             them first.'''
         with self._lock:
             record = self._records.get(instance_number)
@@ -137,7 +162,7 @@ class IviumsoftInstanceManager:
             else:
                 warnings.warn(
                     f"IviumSoft instance {instance_number} (pid {record.pid}) "
-                    f"did not close within {self._close_timeout}s — "
+                    f"did not close within {self._close_timeout}s, "
                     "terminating the process",
                     UserWarning,
                     stacklevel=2,
@@ -169,6 +194,91 @@ class IviumsoftInstanceManager:
             self._records[instance_number] = record
             return record
 
+    def discover(self) -> DiscoveryReport:
+        '''Read-only diagnostic: never launches, closes, prunes or adopts.
+
+            Reports the records this manager holds (tracked), active driver
+            instance numbers with no record (orphans), and IviumSoft
+            processes (matched by the manager's exe path) that no record
+            points at (untracked, sorted by start time). The recommended
+            recovery flow is discover(), then adopt() each untracked
+            process you can pair with an orphan number, then close_orphans()
+            for whatever remains.'''
+        with self._lock:
+            active_instances = Pyvium.get_active_iviumsoft_instances()
+            tracked = [self._records[number] for number in sorted(self._records)]
+            known_pids = {record.pid for record in tracked
+                          if record.pid is not None}
+
+            untracked = [
+                UntrackedProcess(
+                    pid=pid,
+                    started_at=windows_process.get_process_creation_time(pid),
+                    window_title=windows_process.get_main_window_title(pid),
+                )
+                for pid in windows_process.find_pids_by_exe(self._exe_path)
+                if pid not in known_pids
+            ]
+            untracked.sort(key=lambda process: (
+                process.started_at is None,
+                process.started_at or datetime.min,
+                process.pid,
+            ))
+
+            return DiscoveryReport(
+                tracked=tracked,
+                orphan_instance_numbers=sorted(
+                    number for number in active_instances
+                    if number not in self._records),
+                untracked_processes=untracked,
+            )
+
+    def close_orphans(self, force: bool = False) -> list[int]:
+        '''Gracefully closes every untracked IviumSoft process (the
+            untracked_processes of discover()), escalating to a hard
+            terminate per process if it does not exit in time. Returns the
+            pids that were closed.
+
+            Orphan pids cannot be paired with driver instance numbers, so
+            the busy check is all-or-nothing: if any orphan instance is
+            measuring, nothing is closed unless force=True. For instances
+            that are still in use, prefer discover() + adopt() over
+            sweeping them away here.'''
+        with self._lock:
+            report = self.discover()
+            if not force:
+                for instance_number in report.orphan_instance_numbers:
+                    if self._is_busy(instance_number):
+                        raise DeviceBusyError(
+                            f"Orphan instance {instance_number} is measuring "
+                            "and cannot be paired with a specific process; "
+                            "nothing was closed. Adopt and close it "
+                            "individually, or use close_orphans(force=True) "
+                            "to override.")
+
+            pending = [process.pid for process in report.untracked_processes]
+            for pid in pending:
+                windows_process.close_main_windows(pid)
+
+            deadline = time.monotonic() + self._close_timeout
+            while pending:
+                pending = [pid for pid in pending
+                           if windows_process.is_process_running(pid)]
+                if not pending or time.monotonic() >= deadline:
+                    break
+                time.sleep(self._poll_interval)
+
+            for pid in pending:
+                warnings.warn(
+                    f"Orphan IviumSoft process (pid {pid}) did not close "
+                    f"within {self._close_timeout}s, terminating the process",
+                    UserWarning,
+                    stacklevel=2,
+                )
+                windows_process.terminate_process(pid)
+
+            return [process.pid for process in report.untracked_processes]
+
     def list_instances(self) -> list[ManagedInstance]:
         '''Returns one record per active driver instance: launched and
             adopted ones carry their pid; unknown orphans have pid None.
@@ -191,11 +301,14 @@ class IviumsoftInstanceManager:
                 for instance_number in active_instances
             ]
 
-    def _verify_not_busy(self, instance_number: int) -> None:
+    def _is_busy(self, instance_number: int) -> bool:
         status_code, _ = Pyvium.device(instance_number).get_device_status()
-        if status_code == DEVICE_STATUS_BUSY:
+        return status_code == DEVICE_STATUS_BUSY
+
+    def _verify_not_busy(self, instance_number: int) -> None:
+        if self._is_busy(instance_number):
             raise DeviceBusyError(
-                f"Instance {instance_number} is measuring — aborting the "
+                f"Instance {instance_number} is measuring, aborting the "
                 "method first, or use close(force=True) to override")
 
     @staticmethod
