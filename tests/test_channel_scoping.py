@@ -1,9 +1,15 @@
 '''Tests for thread-safe channel scoping (Pyvium.on_channel,
-Pyvium.device(n).channel(m)) and the channel helpers.
+Pyvium.instance(n).channel(m)) and the channel helpers.
 
 The DLL is replaced with an in-memory fake that mimics its global-selection
 behaviour for both instance and channel, so no IviumSoft installation or
 hardware is required.'''
+# Pytest idioms default pylint flags: fixtures are injected as same-named
+# arguments (redefined-outer-name) and may be requested only for their side
+# effects (unused-argument); tests and the fake-DLL methods are self-describing
+# (missing-function-docstring) and the fake mirrors the DLL's IV_* names
+# (invalid-name).
+# pylint: disable=missing-function-docstring,redefined-outer-name,unused-argument,invalid-name
 import threading
 import time
 
@@ -13,7 +19,7 @@ from pyvium import ChannelStatus, Pyvium
 from pyvium.core import Core
 from pyvium.core.core_base import CoreBase, ffi
 from pyvium.errors import DeviceNotConnectedToIviumSoftError, DriverNotOpenError
-from pyvium.pyvium.device import PyviumChannel
+from pyvium.pyvium.instance import PyviumChannel
 
 
 class FakeIviumLib:
@@ -124,7 +130,7 @@ def test_on_channel_requires_open_driver(fake_lib):
 
 
 def test_channel_handle_scopes_instance_and_channel(fake_lib):
-    channel = Pyvium.device(2).channel(3)
+    channel = Pyvium.instance(2).channel(3)
 
     result_code, label = channel.get_device_status()
 
@@ -143,7 +149,7 @@ def test_channel_handle_scopes_instance_and_channel(fake_lib):
 
 
 def test_channel_handle_factory_and_attributes(fake_lib):
-    channel = Pyvium.device(7).channel(4)
+    channel = Pyvium.instance(7).channel(4)
     assert isinstance(channel, PyviumChannel)
     assert channel.instance_number == 7
     assert channel.channel_number == 4

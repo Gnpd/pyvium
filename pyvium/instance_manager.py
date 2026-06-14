@@ -302,7 +302,7 @@ class IviumsoftInstanceManager:
             ]
 
     def _is_busy(self, instance_number: int) -> bool:
-        status_code, _ = Pyvium.device(instance_number).get_device_status()
+        status_code, _ = Pyvium.instance(instance_number).get_device_status()
         return status_code == DEVICE_STATUS_BUSY
 
     def _verify_not_busy(self, instance_number: int) -> None:

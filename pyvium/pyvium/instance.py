@@ -2,19 +2,24 @@
 import functools
 
 
-class PyviumDevice:
+class PyviumInstance:
     '''Handle bound to one IviumSoft instance.
+
+        An "instance" is one running IviumSoft window/process, selected through
+        IV_selectdevice. Despite that DLL name, it selects an IviumSoft instance,
+        not a hardware device (see docs/terminology.md); the device methods on
+        this handle act on whatever instrument is connected inside the instance.
 
         Exposes the full Pyvium API; every method call runs inside
         Pyvium.on_instance(instance_number), so the right instance is selected
         and the driver lock is held for the duration of the call:
 
-            device = Pyvium.device(3)
-            device.connect_device()       # always targets instance 3
-            device.start_method('cv.imf')
+            instance = Pyvium.instance(3)
+            instance.connect_device()       # always targets instance 3
+            instance.start_method('cv.imf')
 
-        For multichannel (Ivium-n-Soft) instances, device.channel(m) returns a
-        handle that also scopes the channel (see PyviumChannel).
+        For multichannel (Ivium-n-Soft) instances, instance.channel(m) returns a
+        handle that also scopes the channel tab (see PyviumChannel).
 
         Handles are cheap to create and hold no driver resources; the driver
         itself is still opened/closed globally via Pyvium.open_driver().'''
@@ -28,7 +33,7 @@ class PyviumDevice:
         return self._instance_number
 
     def channel(self, channel_number: int) -> "PyviumChannel":
-        '''Returns a handle bound to one channel of this instance.
+        '''Returns a handle bound to one channel tab of this instance.
 
             Defined explicitly (not routed through __getattr__) because it
             returns a handle rather than running a scoped Pyvium call.'''
@@ -59,14 +64,19 @@ class PyviumDevice:
 
 
 class PyviumChannel:
-    '''Handle bound to one channel of one IviumSoft instance.
+    '''Handle bound to one channel tab of one IviumSoft instance.
+
+        "Channel" here is the Multichannel-control tab (IV_SelectChannel,
+        Ivium-n-Soft), not a WE32 channel, a multiplexer channel, or necessarily
+        the physical channel number of the hardware (the tab number need not
+        match the instrument's physical channel). See docs/terminology.md.
 
         Exposes the full Pyvium API; every method call runs inside both
         Pyvium.on_instance(instance_number) and Pyvium.on_channel(channel_number),
         so the right instance and channel are selected and the driver lock is
         held for the duration of the call:
 
-            channel = Pyvium.device(1).channel(3)
+            channel = Pyvium.instance(1).channel(3)
             channel.connect_device()      # always targets instance 1, channel 3
             channel.start_method('cv.imf')
 

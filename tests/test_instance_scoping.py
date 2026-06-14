@@ -1,7 +1,15 @@
-'''Tests for thread-safe instance scoping (Pyvium.on_instance, Pyvium.device).
+'''Tests for thread-safe instance scoping (Pyvium.on_instance, Pyvium.instance).
 
 The DLL is replaced with an in-memory fake that mimics its global-selection
 behaviour, so no IviumSoft installation or hardware is required.'''
+# Pytest idioms default pylint flags: fixtures are injected as same-named
+# arguments (redefined-outer-name) and may be requested only for their side
+# effects (unused-argument); tests and the fake-DLL methods are self-describing
+# (missing-function-docstring) and the fake mirrors the DLL's IV_* names
+# (invalid-name).
+# Tests also assert exact return shapes (e.g. == [] documents an empty list)
+# rather than truthiness (use-implicit-booleaness-not-comparison).
+# pylint: disable=missing-function-docstring,redefined-outer-name,unused-argument,invalid-name,use-implicit-booleaness-not-comparison
 import threading
 import time
 
@@ -11,7 +19,7 @@ from pyvium import Pyvium
 from pyvium.core import Core
 from pyvium.core.core_base import CoreBase
 from pyvium.errors import DriverNotOpenError, IviumSoftNotRunningError
-from pyvium.pyvium.device import PyviumDevice
+from pyvium.pyvium.instance import PyviumInstance
 
 
 class FakeIviumLib:
@@ -110,10 +118,10 @@ def test_on_instance_requires_open_driver(fake_lib):
             pass
 
 
-def test_device_proxy_scopes_every_call(fake_lib):
-    device = Pyvium.device(2)
+def test_instance_proxy_scopes_every_call(fake_lib):
+    instance = Pyvium.instance(2)
 
-    result_code, label = device.get_device_status()
+    result_code, label = instance.get_device_status()
 
     assert (result_code, label) == (1, 'available_idle')
     # get_device_status calls IV_getdevicestatus twice: once in the
@@ -126,12 +134,12 @@ def test_device_proxy_scopes_every_call(fake_lib):
     ]
 
 
-def test_device_factory_and_attributes(fake_lib):
-    device = Pyvium.device(7)
-    assert isinstance(device, PyviumDevice)
-    assert device.instance_number == 7
+def test_instance_factory_and_attributes(fake_lib):
+    instance = Pyvium.instance(7)
+    assert isinstance(instance, PyviumInstance)
+    assert instance.instance_number == 7
     with pytest.raises(AttributeError):
-        device.not_a_pyvium_method  # pylint: disable=pointless-statement
+        instance.not_a_pyvium_method  # pylint: disable=pointless-statement
 
 
 def test_get_active_instances_restores_previous_selection(fake_lib):

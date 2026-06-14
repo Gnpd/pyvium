@@ -66,7 +66,12 @@ class GenericFunctions():  # pylint: disable=too-many-public-methods
 
     @staticmethod
     def get_max_device_number():
-        '''Returns the maximum number of devices that can be managed by IviumSoft'''
+        '''Returns the maximum number of devices that can be managed by IviumSoft.
+
+            Per the DLL reference this is the maximum number of simultaneous
+            IviumSoft instances (32), not a count of hardware devices; "device"
+            here follows the DLL naming. See docs/terminology.md. Pending
+            hardware confirmation.'''
         PyviumVerifiers.verify_driver_is_open()
         return Core.IV_MaxDevices()
 
@@ -232,7 +237,7 @@ class GenericFunctions():  # pylint: disable=too-many-public-methods
             controlled.
 
             This is a bare selection: to drive several channels safely from
-            several threads, use on_channel / Pyvium.device(n).channel(m), which
+            several threads, use on_channel / Pyvium.instance(n).channel(m), which
             hold the driver lock across the selection and the commands that
             follow it.'''
         PyviumVerifiers.verify_driver_is_open()
@@ -291,7 +296,7 @@ class GenericFunctions():  # pylint: disable=too-many-public-methods
 
             A channel only means something within the selected IviumSoft
             instance, so nest this inside on_instance (or use
-            Pyvium.device(n).channel(m), which does both):
+            Pyvium.instance(n).channel(m), which does both):
 
                 with Pyvium.on_instance(2):
                     with Pyvium.on_channel(3):
