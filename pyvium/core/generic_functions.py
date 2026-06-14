@@ -116,7 +116,9 @@ class GenericFunctions(CoreBase):
         If no instrument is connected, the next available instrument in the list can
         be connected (IV_connect) and controlled."""
         channel_number_ptr = ffi.new(LONG_PTR, channel_number)
-        return CoreBase.get_lib().IV_SelectChannel(channel_number_ptr)
+        result_code = CoreBase.get_lib().IV_SelectChannel(channel_number_ptr)
+        CoreBase.set_selected_channel(channel_number)
+        return result_code
 
     @staticmethod
     def IV_SelectSn(serial_number: str) -> int:
