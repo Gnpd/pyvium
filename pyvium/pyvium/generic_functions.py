@@ -1,10 +1,35 @@
 import warnings
 from contextlib import contextmanager
+from dataclasses import dataclass
 
 from ..core import Core
 from ..errors import (DeviceNotConnectedToIviumSoftError,
                       IviumSoftNotRunningError)
 from ..pyvium_verifiers import PyviumVerifiers
+
+_STATUS_LABELS = {
+    -1: 'no IviumSoft',
+    0: 'not connected',
+    1: 'available_idle',
+    2: 'available_busy',
+    3: 'no device available',
+}
+# Status codes for which IV_readSN cannot return a meaningful serial number
+# (no device behind the channel), so the scan skips the read for them.
+_NO_SERIAL_STATUS = (-1, 0, 3)
+
+
+@dataclass
+class ChannelStatus:
+    '''One multichannel channel as seen during a get_channel_statuses scan.
+
+        serial_number is empty when no device sits behind the channel
+        (status_code in -1/0/3). status_label is the human-readable form of
+        status_code, matching get_device_status.'''
+    channel: int
+    serial_number: str
+    status_code: int
+    status_label: str
 
 
 class GenericFunctions():
@@ -51,15 +76,8 @@ class GenericFunctions():
             3 (no device available)'''
         PyviumVerifiers.verify_driver_is_open()
         PyviumVerifiers.verify_iviumsoft_is_running()
-        status_labels = {
-            '-1': 'no IviumSoft',
-            '0': 'not connected',
-            '1': 'available_idle',
-            '2': 'available_busy',
-            '3': 'no device available'
-        }
         result_code = Core.IV_getdevicestatus()
-        return result_code, status_labels[str(result_code)]
+        return result_code, _STATUS_LABELS[result_code]
 
     @staticmethod
     def is_iviumsoft_running() -> bool:
@@ -211,9 +229,17 @@ class GenericFunctions():
             Now the channel/instrument that is connected to this tab can be controlled.
             If no instrument is connected,
             the next available instrument in the list can be connected (IV_connect) and
-            controlled.'''
+            controlled.
+
+            This is a bare selection: to drive several channels safely from
+            several threads, use on_channel / Pyvium.device(n).channel(m), which
+            hold the driver lock across the selection and the commands that
+            follow it.'''
         PyviumVerifiers.verify_driver_is_open()
         PyviumVerifiers.verify_iviumsoft_is_running()
+        # IV_SelectChannel's return is not routed through verify_result_code: it
+        # is unconfirmed whether it follows the setter-code convention or returns
+        # the channel number. Left as-is pending hardware verification.
         Core.IV_SelectChannel(channel_number)
 
     @staticmethod
@@ -248,3 +274,95 @@ class GenericFunctions():
                 f"Serial number '{serial_number}' not found in the available device list."
             )
         return device_index
+
+    @staticmethod
+    @contextmanager
+    def on_channel(channel_number: int):
+        '''Context manager that runs a block of commands on a given
+            multichannel channel atomically.
+
+            The twin of on_instance, one level down: acquires the process-wide
+            driver lock, selects the channel, runs the block, and restores the
+            previously selected channel even if the block raises:
+
+                with Pyvium.on_channel(3):
+                    Pyvium.connect_device()
+                    Pyvium.start_method('cv.imf')
+
+            A channel only means something within the selected IviumSoft
+            instance, so nest this inside on_instance (or use
+            Pyvium.device(n).channel(m), which does both):
+
+                with Pyvium.on_instance(2):
+                    with Pyvium.on_channel(3):
+                        ...
+
+            The lock serializes this process's threads only. It cannot stop a
+            manual channel change in the IviumSoft UI (a separate process), so
+            the restored channel is the last value we selected, not the live UI
+            state. For robust connection targeting that does not depend on the
+            active channel, prefer select_serial_number / connect_device_to_channel.'''
+        PyviumVerifiers.verify_driver_is_open()
+        with Core.get_lock():
+            previous_channel = Core.get_selected_channel()
+            Core.IV_SelectChannel(channel_number)
+            try:
+                yield
+            finally:
+                Core.IV_SelectChannel(previous_channel)
+
+    @staticmethod
+    def get_channel_statuses(number_of_channels: int) -> list[ChannelStatus]:
+        '''Scans channels 1..number_of_channels and returns one ChannelStatus
+            per channel (channel, serial number, status code, status label).
+
+            The whole scan runs under the driver lock and restores the
+            previously selected channel afterwards, so it does not interleave
+            with other threads. The serial number is read only for channels
+            that have a device behind them; it is empty otherwise.'''
+        PyviumVerifiers.verify_driver_is_open()
+        PyviumVerifiers.verify_iviumsoft_is_running()
+        statuses = []
+        with Core.get_lock():
+            previous_channel = Core.get_selected_channel()
+            try:
+                for channel in range(1, number_of_channels + 1):
+                    Core.IV_SelectChannel(channel)
+                    status_code = Core.IV_getdevicestatus()
+                    serial_number = (
+                        Core.IV_readSN()[1]
+                        if status_code not in _NO_SERIAL_STATUS else '')
+                    statuses.append(ChannelStatus(
+                        channel=channel,
+                        serial_number=serial_number,
+                        status_code=status_code,
+                        status_label=_STATUS_LABELS[status_code],
+                    ))
+            finally:
+                Core.IV_SelectChannel(previous_channel)
+        return statuses
+
+    @staticmethod
+    def connect_device_to_channel(serial_number: str, channel: int) -> None:
+        '''Connects a specific device (by serial number) to a specific channel.
+
+            Selects the channel, disconnects any idle device already on it,
+            then selects the requested device and connects it. The whole
+            sequence runs under the driver lock so no other thread can change
+            the selection mid-way.
+
+            Unlike on_channel, this leaves the target channel active on return:
+            connecting is a deliberate state change toward that channel, so
+            restoring a previous channel would only flip the focused tab away
+            (the connection itself persists regardless of the active tab).
+
+            Raises DeviceNotConnectedToIviumSoftError if the serial number is
+            not in the available device list.'''
+        PyviumVerifiers.verify_driver_is_open()
+        PyviumVerifiers.verify_iviumsoft_is_running()
+        with Core.get_lock():
+            Core.IV_SelectChannel(channel)
+            if Core.IV_getdevicestatus() == 1:  # idle, a device is connected
+                GenericFunctions.disconnect_device()
+            GenericFunctions.select_serial_number(serial_number)
+            GenericFunctions.connect_device()
