@@ -1,7 +1,7 @@
 from .batch_mode_functions import BatchModeFunctions
-from .device import PyviumDevice
+from .device import PyviumChannel, PyviumDevice
 from .direct_mode_functions import DirectModeFunctions
-from .generic_functions import GenericFunctions
+from .generic_functions import ChannelStatus, GenericFunctions
 from .method_mode_functions import MethodModeFunctions
 
 
