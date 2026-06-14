@@ -32,7 +32,7 @@ class ChannelStatus:
     status_label: str
 
 
-class GenericFunctions():
+class GenericFunctions():  # pylint: disable=too-many-public-methods
     @staticmethod
     def open_driver(verify_iviumsoft: bool = True):
         '''Open the driver to manipulate the Ivium software.
