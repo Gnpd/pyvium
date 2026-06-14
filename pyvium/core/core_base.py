@@ -28,6 +28,35 @@ class CoreBase:
     # Re-entrant so nested locked sections (high-level methods calling other
     # high-level methods on the same thread) do not deadlock.
     __lock = threading.RLock()
+    # Cache of the last full active-instance scan (each scan costs 32 DLL calls).
+    # None means "unknown, must rescan". Invalidated by open/close_driver and by
+    # the instance manager when it launches/closes/adopts an instance. It cannot
+    # see instances that appear or close outside this process, so a periodic full
+    # rescan is still needed; this only spares the hot status-poll path.
+    __active_instances_cache: list | None = None
+
+    @staticmethod
+    def get_active_instances_cache() -> list | None:
+        """
+        Returns the cached active-instance list, or None if it must be rescanned.
+        """
+        return CoreBase.__active_instances_cache
+
+    @staticmethod
+    def set_active_instances_cache(instances) -> None:
+        """
+        Stores the result of a full active-instance scan.
+
+        :param instances: Iterable of active instance numbers.
+        """
+        CoreBase.__active_instances_cache = list(instances)
+
+    @staticmethod
+    def invalidate_active_instances_cache() -> None:
+        """
+        Drops the cached active-instance list so the next read does a full scan.
+        """
+        CoreBase.__active_instances_cache = None
 
     @staticmethod
     def get_lock() -> threading.RLock:

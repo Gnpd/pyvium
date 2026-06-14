@@ -49,6 +49,7 @@ class GenericFunctions():  # pylint: disable=too-many-public-methods
             )
             Core.IV_close()
         Core.IV_open()
+        Core.invalidate_active_instances_cache()  # instance set is now unknown
         if not verify_iviumsoft:
             return
         try:
@@ -63,6 +64,7 @@ class GenericFunctions():  # pylint: disable=too-many-public-methods
         if not Core.is_driver_open():
             return
         Core.IV_close()
+        Core.invalidate_active_instances_cache()
 
     @staticmethod
     def get_max_device_number():
@@ -91,12 +93,29 @@ class GenericFunctions():  # pylint: disable=too-many-public-methods
         return Core.IV_getdevicestatus() != -1
 
     @staticmethod
-    def get_active_iviumsoft_instances():
-        '''Returns a list of active(open) IviumSoft instances.
+    def get_active_iviumsoft_instances(use_cache: bool = False):
+        '''Returns a list of active (open) IviumSoft instances.
 
-            The scan changes the selected instance while it runs, so it holds
-            the driver lock and restores the previous selection afterwards.'''
+            A full scan probes all 32 possible instance slots (32
+            IV_getdevicestatus calls); it changes the selected instance while it
+            runs, so it holds the driver lock and restores the previous selection
+            afterwards. The slot count is fixed at 32 (the driver maximum), not
+            IV_MaxDevices: running IviumSoft windows can outnumber IV_MaxDevices
+            (observed 31 active vs IV_MaxDevices 24), so capping the loop there
+            would silently miss instances.
+
+            use_cache=True returns the list from the last full scan without
+            touching the DLL, when one is available. The cache is kept fresh by
+            open_driver/close_driver and the instance manager, but it cannot see
+            instances that appeared or closed outside this process, so a periodic
+            use_cache=False rescan is still needed. A status poller should iterate
+            the known set (one get_device_status per instance) and only rescan
+            occasionally to pick up topology changes.'''
         PyviumVerifiers.verify_driver_is_open()
+        if use_cache:
+            cached = Core.get_active_instances_cache()
+            if cached is not None:
+                return list(cached)
         active_instances = []
         with Core.get_lock():
             previous_instance = Core.get_selected_instance()
@@ -108,6 +127,7 @@ class GenericFunctions():  # pylint: disable=too-many-public-methods
                         active_instances.append(instance_number)
             finally:
                 Core.IV_selectdevice(previous_instance)
+        Core.set_active_instances_cache(active_instances)
         return active_instances
 
     @staticmethod

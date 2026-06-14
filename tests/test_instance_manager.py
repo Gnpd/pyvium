@@ -8,7 +8,7 @@ from datetime import datetime
 
 import pytest
 
-from pyvium import instance_manager
+from pyvium import Pyvium, instance_manager
 from pyvium.core.core_base import CoreBase
 from pyvium.errors import DeviceBusyError
 from pyvium.instance_manager import IviumsoftInstanceManager
@@ -145,6 +145,7 @@ def world(monkeypatch):
     monkeypatch.setattr(CoreBase, 'get_lib', staticmethod(lambda: lib))
     CoreBase.set_driver_open(True)
     CoreBase.set_selected_instance(1)
+    CoreBase.invalidate_active_instances_cache()
 
     monkeypatch.setattr(instance_manager, '_launch_process',
                         fake_world.launch_process)
@@ -397,3 +398,17 @@ def test_close_orphans_with_nothing_untracked(world):
 
     # instance 1 is an orphan number, but no untracked process is visible
     assert manager.close_orphans() == []
+
+
+def test_launch_and_close_invalidate_the_active_instance_cache(world):
+    manager = make_manager()
+
+    Pyvium.get_active_iviumsoft_instances()  # populate the cache
+    assert CoreBase.get_active_instances_cache() is not None
+
+    record = manager.launch()
+    assert CoreBase.get_active_instances_cache() is None  # launch invalidated it
+
+    Pyvium.get_active_iviumsoft_instances()  # repopulate
+    manager.close(record.instance_number)
+    assert CoreBase.get_active_instances_cache() is None  # close invalidated it

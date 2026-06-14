@@ -12,6 +12,7 @@ import warnings
 from dataclasses import dataclass, field
 from datetime import datetime
 
+from .core import Core
 from .errors import DeviceBusyError
 from .pyvium import Pyvium
 from .util import windows_process
@@ -125,6 +126,7 @@ class IviumsoftInstanceManager:
                         process=process,
                     )
                     self._records[instance_number] = record
+                    Core.invalidate_active_instances_cache()
                     return record
 
                 time.sleep(self._poll_interval)
@@ -170,6 +172,7 @@ class IviumsoftInstanceManager:
                 self._terminate(record)
 
             self._records.pop(instance_number, None)
+            Core.invalidate_active_instances_cache()
 
     def adopt(self, instance_number: int, pid: int) -> ManagedInstance:
         '''Re-attaches to an instance launched outside this manager (e.g.
@@ -277,6 +280,7 @@ class IviumsoftInstanceManager:
                 )
                 windows_process.terminate_process(pid)
 
+            Core.invalidate_active_instances_cache()
             return [process.pid for process in report.untracked_processes]
 
     def list_instances(self) -> list[ManagedInstance]:

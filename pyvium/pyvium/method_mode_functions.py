@@ -49,7 +49,13 @@ class MethodModeFunctions():
 
     @staticmethod
     def abort_method():
-        '''Aborts the ongoing method procedure'''
+        '''Requests an abort of the ongoing method procedure.
+
+            The abort is not instantaneous: the measurement stops at the next
+            data point. At slow sampling rates (e.g. 60 s/point in low-frequency
+            EIS) the device can stay busy for the full remaining interval. Poll
+            get_device_status() and wait for status 1 (idle) before starting a
+            new method, otherwise the next start raises DeviceBusyError.'''
         PyviumVerifiers.verify_driver_is_open()
         PyviumVerifiers.verify_iviumsoft_is_running()
         PyviumVerifiers.verify_device_is_connected_to_iviumsoft()

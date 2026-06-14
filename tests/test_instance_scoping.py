@@ -57,6 +57,7 @@ def fake_lib(monkeypatch):
     monkeypatch.setattr(CoreBase, 'get_lib', staticmethod(lambda: fake))
     CoreBase.set_driver_open(True)
     CoreBase.set_selected_instance(1)
+    CoreBase.invalidate_active_instances_cache()
     yield fake
     CoreBase.set_driver_open(False)
     CoreBase.set_selected_instance(1)
@@ -149,6 +150,38 @@ def test_get_active_instances_restores_previous_selection(fake_lib):
 
     assert active == [1, 2, 3]
     assert fake_lib.selected == 2
+
+
+def test_get_active_populates_cache_and_use_cache_skips_dll(fake_lib):
+    assert Pyvium.get_active_iviumsoft_instances() == [1, 2, 3]
+    calls_after_scan = len(fake_lib.calls)
+
+    cached = Pyvium.get_active_iviumsoft_instances(use_cache=True)
+
+    assert cached == [1, 2, 3]
+    assert len(fake_lib.calls) == calls_after_scan  # cache hit: no DLL calls
+
+
+def test_use_cache_falls_back_to_full_scan_when_empty(fake_lib):
+    CoreBase.invalidate_active_instances_cache()
+
+    active = Pyvium.get_active_iviumsoft_instances(use_cache=True)
+
+    assert active == [1, 2, 3]
+    assert ('IV_getdevicestatus', 1) in fake_lib.calls  # a real scan happened
+
+
+def test_invalidating_cache_forces_a_rescan(fake_lib):
+    Pyvium.get_active_iviumsoft_instances()        # populate
+    fake_lib.active_instances.add(4)               # topology changes underneath
+
+    # stale cache cannot see instance 4
+    assert Pyvium.get_active_iviumsoft_instances(use_cache=True) == [1, 2, 3]
+
+    CoreBase.invalidate_active_instances_cache()
+
+    # a rescan picks it up
+    assert Pyvium.get_active_iviumsoft_instances(use_cache=True) == [1, 2, 3, 4]
 
 
 def test_scoped_calls_from_threads_do_not_interleave(fake_lib):
