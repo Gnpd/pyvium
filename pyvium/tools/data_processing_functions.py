@@ -30,7 +30,8 @@ class DataProcessing:
     def export_to_csv(data, file_path) -> None:
         """Saves the given data to a CSV file at the specified file path."""
         path = os.path.normpath(file_path)
-        with open(path, "w", encoding="UTF-8") as f:
+        # newline="" so csv.writer controls line endings (avoids blank lines on Windows).
+        with open(path, "w", encoding="UTF-8", newline="") as f:
             write = csv.writer(f)
             write.writerows(data)
 
