@@ -98,3 +98,22 @@
 | :heavy_check_mark: get_all_idf_data(idf_path)                 | Extracts all data (primary and extra data) from a ivium .idf file and returns a data dictionary |
 | :heavy_check_mark: convert_idf_to_csv(idf_path)               | Extracts the data from a ivium .idf file and saves the data to a .csv file                     |
 | :heavy_check_mark: convert_idf_dir_to_csv(idf_dir_path='.')   | Extracts the data of all .idf files on a directory and saves the data to .csv files            |
+
+### Measurement SQLite readers
+
+Read the SQLite files IviumSoft writes (`DataServer_*.idf.sqlite`) and the catalog
+(`index.sqlite`). Read-only, WAL-safe, schema-versioned (DatabaseVersion 9 verified); no DLL or
+hardware needed. See `docs/terminology.md` for device/instance/channel terms.
+
+| Class / method | Description |
+| --- | --- |
+| :heavy_check_mark: `MeasurementReader(path)` | Context-managed reader for one measurement file; validates DatabaseVersion |
+| :heavy_check_mark: `.metadata()` / `.database_version` | metadata table as a dict / the DatabaseVersion |
+| :heavy_check_mark: `.measurements()` / `.method_parameters()` / `.measurement_parts()` | measurement rows / method key-values / cycle-level-channel parts |
+| :heavy_check_mark: `.read_points(after_point_id=None)` | Data points (t,x,y,z,q + decoded status + part context); `after_point_id` for incremental tailing |
+| :heavy_check_mark: `.read_impedance(after_point_id=None)` | FRA/EIS points (frequency, Z', Z'') |
+| :heavy_check_mark: `.latest_point_id()` | Highest point_id (tailer catch-up cursor) |
+| :heavy_check_mark: `.to_csv(path)` / `.to_dataframe()` | Export points to CSV / pandas (pandas optional, lazy import) |
+| :heavy_check_mark: `MeasurementIndex(path)` | Context-managed reader for index.sqlite |
+| :heavy_check_mark: `.entries(...)` | Filter the catalog (serial, device, technique, title, project, operator, date range, limit) |
+| :heavy_check_mark: `.resolve_path(entry, base_dir)` / `.open_measurement(entry, base_dir)` | Build a file path / open its MeasurementReader |
