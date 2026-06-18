@@ -81,9 +81,9 @@ class IviumsoftInstanceManager:
         process by diffing the active-instance list before and after, so
         launches are serialized: one manager lock covers launch and close.
 
-        The driver instance numbering after an instance closes is assumed
-        stable for the remaining instances (not confirmed against the DLL
-        reference).'''
+        The driver instance numbering after an instance closes is stable for
+        the remaining instances: closing one leaves a gap rather than
+        renumbering the survivors (verified against real IviumSoft hardware).'''
 
     def __init__(self, exe_path: str = DEFAULT_IVIUMSOFT_EXE,
                  launch_timeout: float = 30.0,
