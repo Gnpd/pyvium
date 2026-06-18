@@ -3,9 +3,9 @@
 The words *device*, *instance*, and *channel* are overloaded in the Ivium
 ecosystem, and the IviumSoft DLL reference itself warns about it. This page is
 the canonical glossary for PYVIUM. It is grounded in the IviumSoft manual
-(the extracted CHM under `docs/_chm_extracted/`), notably the *Software
-development driver DLL* reference, *Multichannel control*, *MC Mode*, and
-*Ivium-n-Stat* pages.
+(the help CHM that ships with IviumSoft), notably the *Software development
+driver DLL* reference, *Multichannel control*, *MC Mode*, and *Ivium-n-Stat*
+pages.
 
 ## The hierarchy
 
