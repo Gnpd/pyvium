@@ -6,12 +6,18 @@ the supported DatabaseVersion set, a read-only WAL-safe connection helper, the
 status-byte decoder, and the provisional per-technique column labels.
 '''
 import sqlite3
+import warnings
 from pathlib import Path
 
-# DatabaseVersion (metadata table) values this reader is verified against. Older
-# files exist in the wild (6, 8 observed in the index) but the schema differs and
-# we have no sample to test, so they are rejected rather than silently misread.
-SUPPORTED_DB_VERSIONS = frozenset({9})
+# DatabaseVersion (metadata table) values this reader is verified against. The
+# tables the reader reads (point, pointdata, pointfra, metadata, measurement,
+# method) are identical across versions 5-9; measurementpart only gained columns
+# (muxchannel @6, wexchannel @7, measvalue @9), which the reader treats as
+# optional. All five were verified against sample files. A version newer than the
+# max is assumed to be more of the same (additive only): it is read with a
+# warning. A version below the min is rejected, since we cannot assume the older
+# schema is merely a column-subset.
+SUPPORTED_DB_VERSIONS = frozenset({5, 6, 7, 8, 9})
 
 # Read-only connections wait this long for the WAL writer instead of failing fast.
 _BUSY_TIMEOUT_MS = 2000
@@ -56,12 +62,27 @@ def read_database_version(connection: sqlite3.Connection) -> int:
 
 
 def verify_database_version(version: int) -> None:
-    '''Raises UnsupportedDatabaseVersionError if the version is not supported.'''
-    if version not in SUPPORTED_DB_VERSIONS:
-        supported = ", ".join(str(v) for v in sorted(SUPPORTED_DB_VERSIONS))
-        raise UnsupportedDatabaseVersionError(
-            f"DatabaseVersion {version} is not supported (supported: {supported}). "
-            "The schema differs between versions; capture a sample file to add support.")
+    '''Checks a DatabaseVersion against the verified set.
+
+        Verified versions pass silently. A version newer than the verified max
+        is allowed with a UserWarning (newer versions have only added columns,
+        which the reader tolerates), so reading keeps working without a code
+        change. A version below the verified min raises
+        UnsupportedDatabaseVersionError, since an older schema may differ in ways
+        we cannot assume away.'''
+    if version in SUPPORTED_DB_VERSIONS:
+        return
+    supported = ", ".join(str(v) for v in sorted(SUPPORTED_DB_VERSIONS))
+    if version > max(SUPPORTED_DB_VERSIONS):
+        warnings.warn(
+            f"DatabaseVersion {version} is newer than the verified versions "
+            f"({supported}); reading it on the assumption it only adds columns. "
+            "Verify the results and add it to SUPPORTED_DB_VERSIONS once checked.",
+            UserWarning, stacklevel=2)
+        return
+    raise UnsupportedDatabaseVersionError(
+        f"DatabaseVersion {version} is not supported (verified: {supported}). "
+        "Older schemas may differ structurally; capture a sample file to add support.")
 
 
 def decode_status(statusbyte: int) -> dict:
@@ -84,12 +105,12 @@ def decode_status(statusbyte: int) -> dict:
 # Generic meaning of the point table's x/y/z/q columns. The DLL exposes the same
 # per-technique triplet through IV_getdata (d1/d2/d3) and the meaning depends on
 # the technique; in the dbver-9 samples x is the control/time axis, y the current,
-# z the potential and q the charge. This is PROVISIONAL (see INTEGRATION_PLAN open
-# questions); raw columns are always available on DataPoint regardless of labels.
+# z the potential and q the charge. This is PROVISIONAL and not yet confirmed
+# per technique; raw columns are always available on DataPoint regardless of labels.
 _DEFAULT_COLUMN_LABELS = {"x": "x", "y": "current", "z": "potential", "q": "charge"}
 
 # Per-technique overrides, keyed by the index.sqlite "technique" string. Empty
-# until confirmed against Spike A captures.
+# until confirmed against captured sample files.
 _TECHNIQUE_COLUMN_LABELS: dict = {}
 
 

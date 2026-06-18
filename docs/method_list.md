@@ -102,7 +102,7 @@
 ### Measurement SQLite readers
 
 Read the SQLite files IviumSoft writes (`DataServer_*.idf.sqlite`) and the catalog
-(`index.sqlite`). Read-only, WAL-safe, schema-versioned (DatabaseVersion 9 verified); no DLL or
+(`index.sqlite`). Read-only, WAL-safe, schema-versioned (DatabaseVersions 5-9 verified); no DLL or
 hardware needed. See `docs/terminology.md` for device/instance/channel terms.
 
 | Class / method | Description |

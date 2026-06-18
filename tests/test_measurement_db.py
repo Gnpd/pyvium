@@ -1,7 +1,7 @@
 '''Tests for the measurement SQLite reader.
 
 A tiny DatabaseVersion-9 file is synthesised in a tmp dir from the known schema,
-so no real (customer) measurement data is committed and no hardware is needed.'''
+so no real measurement data is committed and no hardware is needed.'''
 # Tests are self-describing and use pytest fixtures (redefined-outer-name).
 # pylint: disable=missing-function-docstring,redefined-outer-name
 
@@ -127,10 +127,20 @@ def test_to_csv(db_path, tmp_path):
     assert len(lines) == 1 + 5  # header + 5 points
 
 
-def test_unsupported_version_raises(tmp_path):
-    path = _build(str(tmp_path / "future.sqlite"), db_version="999")
+def test_old_version_raises(tmp_path):
+    # below the verified minimum: older schemas may differ structurally.
+    path = _build(str(tmp_path / "old.sqlite"), db_version="4")
     with pytest.raises(UnsupportedDatabaseVersionError):
         MeasurementReader(path).open()
+
+
+def test_newer_version_warns_and_reads(tmp_path):
+    # newer than the verified max: assumed additive-only, so read with a warning.
+    path = _build(str(tmp_path / "future.sqlite"), db_version="999")
+    with pytest.warns(UserWarning):
+        with MeasurementReader(path) as reader:
+            assert reader.database_version == 999
+            assert [p.point_id for p in reader.read_points()] == [1, 2, 3, 4, 5]
 
 
 def test_methods_require_open(db_path):

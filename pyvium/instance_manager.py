@@ -82,8 +82,8 @@ class IviumsoftInstanceManager:
         launches are serialized: one manager lock covers launch and close.
 
         The driver instance numbering after an instance closes is assumed
-        stable for the remaining instances (pending confirmation from Ivium,
-        see INTEGRATION_PLAN §7.1).'''
+        stable for the remaining instances (not confirmed against the DLL
+        reference).'''
 
     def __init__(self, exe_path: str = DEFAULT_IVIUMSOFT_EXE,
                  launch_timeout: float = 30.0,
@@ -176,9 +176,9 @@ class IviumsoftInstanceManager:
 
     def adopt(self, instance_number: int, pid: int) -> ManagedInstance:
         '''Re-attaches to an instance launched outside this manager (e.g.
-            found after an API-server restart). The pid must come from an
-            external source such as a session registry: the driver cannot
-            map instance numbers to pids.'''
+            found after a process restart). The pid must come from an
+            external source that recorded it: the driver cannot map instance
+            numbers to pids.'''
         with self._lock:
             active_instances = Pyvium.get_active_iviumsoft_instances()
             if instance_number not in active_instances:

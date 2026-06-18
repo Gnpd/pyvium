@@ -2,7 +2,7 @@
 
 Pure file I/O over the stdlib sqlite3 module: no DLL, hardware-free and testable.
 Opens the file read-only and WAL-safe so it can tail a measurement that IviumSoft
-is still writing (see connect_readonly / INTEGRATION_PLAN data plane).
+is still writing (see connect_readonly).
 '''
 from dataclasses import dataclass
 
@@ -140,12 +140,18 @@ class MeasurementReader:
         return {row["k"]: row["v"] for row in rows}
 
     def measurement_parts(self, measurement_id: int | None = None) -> list[MeasurementPart]:
-        '''Returns the measurementpart rows (cycle/level/channel groupings).'''
+        '''Returns the measurementpart rows (cycle/level/channel groupings).
+
+            muxchannel/wexchannel/measvalue were added in DatabaseVersions 6/7/9
+            respectively; on older files they are reported as None.'''
         self._require_open()
         measurement_id = self._resolve_measurement_id(measurement_id)
+        present = self._table_columns("measurementpart")
+        optional = ", ".join(name if name in present else f"NULL AS {name}"
+                             for name in ("muxchannel", "wexchannel", "measvalue"))
         rows = self._connection.execute(
             "SELECT measurementpart_id, measurement_id, cycle, level, tstep, "
-            "muxchannel, wexchannel, measvalue FROM measurementpart "
+            f"{optional} FROM measurementpart "
             "WHERE measurement_id = ? ORDER BY measurementpart_id", (measurement_id,))
         return [MeasurementPart(
             row["measurementpart_id"], row["measurement_id"], row["cycle"], row["level"],
@@ -160,9 +166,12 @@ class MeasurementReader:
             how a live tailer fetches new data incrementally (WHERE point_id > ?).'''
         self._require_open()
         measurement_id = self._resolve_measurement_id(measurement_id)
+        present = self._table_columns("measurementpart")
+        mux = "mp.muxchannel" if "muxchannel" in present else "NULL"
+        wex = "mp.wexchannel" if "wexchannel" in present else "NULL"
         query = (
             "SELECT p.point_id, p.t, p.x, p.y, p.z, p.q, p.statusbyte, "
-            "p.measurementpart_id, mp.cycle, mp.level, mp.muxchannel, mp.wexchannel "
+            f"p.measurementpart_id, mp.cycle, mp.level, {mux} AS muxchannel, {wex} AS wexchannel "
             "FROM point p JOIN measurementpart mp ON mp.measurementpart_id = p.measurementpart_id "
             "WHERE mp.measurement_id = ?")
         params: list = [measurement_id]
@@ -231,6 +240,14 @@ class MeasurementReader:
         if self._connection is None:
             raise RuntimeError(
                 "MeasurementReader is not open; use it as a context manager or call open().")
+
+    def _table_columns(self, table: str) -> set:
+        '''Returns the set of column names in a table (for version-tolerant queries).
+
+            Columns were added across DatabaseVersions without removals, so a query
+            can fall back to NULL for a column an older file does not have.'''
+        return {row["name"]
+                for row in self._connection.execute(f'PRAGMA table_info("{table}")')}
 
     def _resolve_measurement_id(self, measurement_id: int | None) -> int:
         if measurement_id is not None:
