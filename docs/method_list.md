@@ -90,6 +90,37 @@
 | :heavy_check_mark: set_status_par(int)                  | :heavy_check_mark: IV_StatusParSet(value)  |
 | :heavy_check_mark: get_status_par()                     | :heavy_check_mark: IV_StatusParGet(value)  |
 
+### Instance and channel scoping
+
+Thread-safe selection of an IviumSoft instance (and Multichannel-control channel tab). The
+context managers hold the driver lock across the selection and the commands that follow it; the
+handles expose the full Pyvium API scoped to an instance (and channel). These orchestrate the
+`IV_selectdevice` / `IV_SelectChannel` calls rather than mapping 1:1 to a DLL function. See
+`docs/terminology.md` for device/instance/channel terms.
+
+| Pyvium API | Description |
+| --- | --- |
+| :heavy_check_mark: `Pyvium.on_instance(n)` | Context manager: select instance `n`, run the block under the driver lock, restore the previous selection (even on error) |
+| :heavy_check_mark: `Pyvium.instance(n)` -> `PyviumInstance` | Handle bound to instance `n`; every Pyvium call on it runs inside `on_instance(n)` |
+| :heavy_check_mark: `Pyvium.on_channel(m)` | Context manager: select channel tab `m` atomically; nest inside `on_instance` |
+| :heavy_check_mark: `Pyvium.instance(n).channel(m)` -> `PyviumChannel` | Handle bound to instance `n` + channel `m`; every call scopes both selections |
+
+### Instance lifecycle management
+
+`IviumsoftInstanceManager` launches, tracks, adopts and closes IviumSoft processes, mapping each
+to its driver instance number. Windows-only (uses native Win32 process helpers). Pair with the
+cold-start `open_driver(verify_iviumsoft=False)`.
+
+| Class / method | Description |
+| --- | --- |
+| :heavy_check_mark: `IviumsoftInstanceManager(exe_path=..., ...)` | Manager over IviumSoft processes |
+| :heavy_check_mark: `.launch()` -> `ManagedInstance` | Start one IviumSoft process and map it to the new driver instance number |
+| :heavy_check_mark: `.close(instance_number, force=False)` | Gracefully close an instance (refuses a measuring one unless `force`) |
+| :heavy_check_mark: `.adopt(instance_number, pid)` | Re-attach to an instance launched outside the manager |
+| :heavy_check_mark: `.discover()` -> `DiscoveryReport` | Read-only: pair tracked instances, orphan instance numbers and untracked processes |
+| :heavy_check_mark: `.close_orphans(force=False)` | Close every untracked IviumSoft process the manager does not track |
+| :heavy_check_mark: `.list_instances()` -> `list[ManagedInstance]` | One record per active instance (managed carry a pid; orphans have `pid=None`) |
+
 ## Tools Methods
 | Tools Methods (DataProcessing)                                | Description                                                                                    |
 | ------------------------------------------------------------- | ---------------------------------------------------------------------------------------------- |
