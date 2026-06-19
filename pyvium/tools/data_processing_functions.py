@@ -9,9 +9,9 @@ from ..util import get_file_list
 class DataProcessing:
     @staticmethod
     def _extract_data_section(lines: List[str], start_index: int) -> List[List[float]]:
+        """Extracts a section of data from a list of lines starting at the given index."""
         if not lines or start_index >= len(lines):
             raise ValueError("Invalid input parameters")
-        """Extracts a section of data from a list of lines starting at the given index."""
         try:
             section_data = []
             num_points = int(lines[start_index + 2].strip().replace('\x00', ''))
@@ -52,7 +52,7 @@ class DataProcessing:
                 data.extend(DataProcessing._extract_data_section(lines, index))
 
         return data
-    
+        
     @staticmethod
     def get_all_idf_data(idf_path: str) -> Dict[str, List[List[float]]]:
         """Extracts all data (primary and extra measurement data) from an IDF file and returns it as a dictionary."""
