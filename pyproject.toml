@@ -5,9 +5,9 @@ authors = [
 ]
 description = "A tiny Python wrapper around the <Software development driver DLL> for IviumSoft."
 exclude = ["docs", "tests"]
-homepage = "https://github.com/SF-Tec/pyvium"
+homepage = "https://github.com/Gnpd/pyvium"
 keywords = ["ivium", "iviumsoft", "ivium software", "ivium compactstat"]
-repository = "https://github.com/SF-Tec/pyvium"
+repository = "https://github.com/Gnpd/pyvium"
 license = "Apache-2.0"
 name = "pyvium"
 packages = [{ include = "pyvium" }]

@@ -68,4 +68,4 @@ pip install pyvium==0.3.0rc1
   (and, for many calls, connected hardware). The SQLite readers and IDF/CSV tools
   are the exception: they run without the DLL or hardware.
 
-[0.3.0rc1]: https://github.com/SF-Tec/pyvium/releases/tag/v0.3.0rc1
+[0.3.0rc1]: https://github.com/Gnpd/pyvium/releases/tag/v0.3.0rc1
