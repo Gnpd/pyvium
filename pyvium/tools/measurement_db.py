@@ -89,6 +89,7 @@ class MeasurementReader:
         self._db_path = db_path
         self._connection = None
         self._database_version = None
+        self._table_columns_cache: dict[str, set] = {}
 
     def __enter__(self) -> "MeasurementReader":
         self.open()
@@ -100,6 +101,7 @@ class MeasurementReader:
     def open(self) -> "MeasurementReader":
         '''Opens the read-only connection and validates the DatabaseVersion.'''
         self._connection = connect_readonly(self._db_path)
+        self._table_columns_cache = {}
         self._database_version = read_database_version(self._connection)
         verify_database_version(self._database_version)
         return self
@@ -109,6 +111,7 @@ class MeasurementReader:
         if self._connection is not None:
             self._connection.close()
             self._connection = None
+        self._table_columns_cache = {}
 
     @property
     def database_version(self) -> int:
@@ -186,8 +189,14 @@ class MeasurementReader:
                        after_point_id: int | None = None) -> list[ImpedancePoint]:
         '''Returns the impedance/FRA points (frequency, Z', Z'') in point_id order.
 
-            after_point_id behaves as in read_points for incremental tailing.'''
+            after_point_id behaves as in read_points for incremental tailing.
+
+            Returns [] when the file has no pointfra table at all, which is the
+            case for non-EIS techniques: a caller that does not know the technique
+            up front can call this unconditionally without catching an error.'''
         self._require_open()
+        if not self._table_columns("pointfra"):  # no FRA table -> non-EIS measurement
+            return []
         measurement_id = self._resolve_measurement_id(measurement_id)
         query = (
             "SELECT f.point_id, p.t, f.f, f.z1, f.z2, f.ohr, f.fraquality "
@@ -210,10 +219,10 @@ class MeasurementReader:
         self._require_open()
         measurement_id = self._resolve_measurement_id(measurement_id)
         row = self._connection.execute(
-            "SELECT MAX(p.point_id) FROM point p "
+            "SELECT MAX(p.point_id) AS max_point_id FROM point p "
             "JOIN measurementpart mp ON mp.measurementpart_id = p.measurementpart_id "
             "WHERE mp.measurement_id = ?", (measurement_id,)).fetchone()
-        return row[0]
+        return row["max_point_id"]
 
     def to_csv(self, file_path: str, measurement_id: int | None = None) -> None:
         '''Exports the points (with a header row) to a CSV file.'''
@@ -245,15 +254,24 @@ class MeasurementReader:
         '''Returns the set of column names in a table (for version-tolerant queries).
 
             Columns were added across DatabaseVersions without removals, so a query
-            can fall back to NULL for a column an older file does not have.'''
-        return {row["name"]
-                for row in self._connection.execute(f'PRAGMA table_info("{table}")')}
+            can fall back to NULL for a column an older file does not have. An empty
+            set means the table does not exist (PRAGMA table_info yields no rows),
+            which callers use to detect optional tables such as pointfra.
+
+            Memoised per table for the lifetime of the connection: the schema cannot
+            change mid-file, so this avoids a PRAGMA on every read for a live tailer.'''
+        cached = self._table_columns_cache.get(table)
+        if cached is None:
+            cached = {row["name"]
+                      for row in self._connection.execute(f'PRAGMA table_info("{table}")')}
+            self._table_columns_cache[table] = cached
+        return cached
 
     def _resolve_measurement_id(self, measurement_id: int | None) -> int:
         if measurement_id is not None:
             return measurement_id
         row = self._connection.execute(
-            "SELECT MIN(measurement_id) FROM measurement").fetchone()
-        if row is None or row[0] is None:
+            "SELECT MIN(measurement_id) AS measurement_id FROM measurement").fetchone()
+        if row is None or row["measurement_id"] is None:
             raise ValueError("No measurement found in this file")
-        return row[0]
+        return row["measurement_id"]

@@ -118,6 +118,32 @@ def test_latest_point_id(db_path):
         assert reader.latest_point_id() == 5
 
 
+def test_read_impedance_without_pointfra_returns_empty(tmp_path):
+    # Non-EIS techniques produce files with no pointfra table; read_impedance must
+    # return [] rather than raising, so a caller need not know the technique first.
+    path = str(tmp_path / "no_fra.sqlite")
+    con = sqlite3.connect(path)
+    con.executescript("""
+        CREATE TABLE metadata (key TEXT, value TEXT);
+        CREATE TABLE measurement (measurement_id INTEGER PRIMARY KEY, start_time TEXT,
+            end_time TEXT, mt BLOB);
+        CREATE TABLE measurementpart (measurementpart_id INTEGER PRIMARY KEY,
+            measurement_id INTEGER, cycle INTEGER, level INTEGER, tstep INTEGER,
+            muxchannel INTEGER, wexchannel INTEGER, measvalue REAL);
+        CREATE TABLE point (point_id INTEGER PRIMARY KEY, measurementpart_id INTEGER,
+            t REAL, x REAL, y REAL, z REAL, q REAL, statusbyte INTEGER);
+    """)
+    con.execute("INSERT INTO metadata VALUES ('DatabaseVersion', '9')")
+    con.execute("INSERT INTO measurement VALUES (1, NULL, NULL, NULL)")
+    con.execute("INSERT INTO measurementpart VALUES (1, 1, 1, 1, 0, 0, 1, 0.0)")
+    con.execute("INSERT INTO point VALUES (1, 1, 0.2, 0.2, -1e-5, -0.1, 0.0, 0)")
+    con.commit()
+    con.close()
+    with MeasurementReader(path) as reader:
+        assert reader.read_impedance() == []
+        assert [p.point_id for p in reader.read_points()] == [1]
+
+
 def test_to_csv(db_path, tmp_path):
     out = tmp_path / "points.csv"
     with MeasurementReader(db_path) as reader:
