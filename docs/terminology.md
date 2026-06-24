@@ -105,6 +105,14 @@ hardware a connection lands on.
   sequence makes `IV_selectdevice=1` the first, `=2` the second, ...), which is
   what `IviumsoftInstanceManager.launch` relies on. Stability of the numbering
   after an instance closes is not yet confirmed.
-- `IV_SelectChannel`'s return value convention is not documented in the DLL
-  reference, so `select_channel` does not route it through `verify_result_code`
-  yet (the reference only documents setter codes 0 / -1 / 1 / 2).
+- `IV_SelectChannel`'s integer argument is the **number of tabs to open**, not a
+  bounds-checked channel index, and the DLL does **not** validate it against the
+  32-channel maximum: hardware-confirmed, `IV_SelectChannel(999)` makes IviumSoft
+  open ~999 tabs. Recover by restarting IviumSoft or resetting the channel count
+  in *Advanced parameters*. The high-level API (`select_channel`, `on_channel`,
+  `get_channel_statuses`, `connect_device_to_channel`) guards against this with
+  `_verify_channel_number`, raising `ValueError` outside 1..32 (`MAX_CHANNELS`).
+- `IV_SelectChannel` is hardware-confirmed to **always return 0**, for valid and
+  out-of-range arguments alike, so the return carries no success/failure status.
+  `select_channel` therefore does not route it through `verify_result_code` (there
+  is nothing to route); this is correct, not a pending item.
