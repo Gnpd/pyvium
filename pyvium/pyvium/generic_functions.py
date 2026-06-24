@@ -119,10 +119,7 @@ class GenericFunctions():  # pylint: disable=too-many-public-methods
             A full scan probes all 32 possible instance slots (32
             IV_getdevicestatus calls); it changes the selected instance while it
             runs, so it holds the driver lock and restores the previous selection
-            afterwards. The slot count is fixed at 32 (the driver maximum), not
-            IV_MaxDevices: running IviumSoft windows can outnumber IV_MaxDevices
-            (observed 31 active vs IV_MaxDevices 24), so capping the loop there
-            would silently miss instances.
+            afterwards. The slot count is fixed at 32.
 
             use_cache=True returns the list from the last full scan without
             touching the DLL, when one is available. The cache is kept fresh by
