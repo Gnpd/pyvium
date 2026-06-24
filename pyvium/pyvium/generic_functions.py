@@ -18,6 +18,26 @@ _STATUS_LABELS = {
 # (no device behind the channel), so the scan skips the read for them.
 _NO_SERIAL_STATUS = (-1, 0, 3)
 
+# Multichannel control supports up to 32 channels/tabs (IviumSoft manual,
+# "Multichannel control"). IV_SelectChannel does NOT bounds-check its argument:
+# it treats the integer as the NUMBER OF TABS to open and always returns 0, so an
+# out-of-range value (e.g. 999) silently makes IviumSoft open that many tabs. The
+# high-level API guards against that with _verify_channel_number.
+MAX_CHANNELS = 32
+
+
+def _verify_channel_number(channel_number: int) -> None:
+    '''Raise ValueError unless channel_number is a valid 1..MAX_CHANNELS channel.
+
+        IV_SelectChannel opens [channel_number] tabs without validating the value,
+        so a typo or out-of-range number would make IviumSoft open that many tabs.
+        This keeps the bare DLL behaviour from leaking through the high-level API.'''
+    if not 1 <= channel_number <= MAX_CHANNELS:
+        raise ValueError(
+            f"channel number {channel_number} is out of range (1..{MAX_CHANNELS}); "
+            "IV_SelectChannel treats the value as a tab count and would open that "
+            "many tabs")
+
 
 @dataclass
 class ChannelStatus:
@@ -256,15 +276,20 @@ class GenericFunctions():  # pylint: disable=too-many-public-methods
             the next available instrument in the list can be connected (IV_connect) and
             controlled.
 
+            channel_number must be in 1..MAX_CHANNELS (32); a larger value would
+            make IviumSoft open that many tabs (see _verify_channel_number), so it
+            raises ValueError instead.
+
             This is a bare selection: to drive several channels safely from
             several threads, use on_channel / Pyvium.instance(n).channel(m), which
             hold the driver lock across the selection and the commands that
             follow it.'''
         PyviumVerifiers.verify_driver_is_open()
         PyviumVerifiers.verify_iviumsoft_is_running()
-        # IV_SelectChannel's return is not routed through verify_result_code: it
-        # is unconfirmed whether it follows the setter-code convention or returns
-        # the channel number. Left as-is pending hardware verification.
+        _verify_channel_number(channel_number)
+        # IV_SelectChannel's return is not routed through verify_result_code:
+        # hardware-confirmed it always returns 0 and carries no status (the int is
+        # an unvalidated tab count, not a setter code), so there is nothing to route.
         Core.IV_SelectChannel(channel_number)
 
     @staticmethod
@@ -326,8 +351,11 @@ class GenericFunctions():  # pylint: disable=too-many-public-methods
             manual channel change in the IviumSoft UI (a separate process), so
             the restored channel is the last value we selected, not the live UI
             state. For robust connection targeting that does not depend on the
-            active channel, prefer select_serial_number / connect_device_to_channel.'''
+            active channel, prefer select_serial_number / connect_device_to_channel.
+
+            channel_number must be in 1..MAX_CHANNELS (32), else ValueError.'''
         PyviumVerifiers.verify_driver_is_open()
+        _verify_channel_number(channel_number)
         with Core.get_lock():
             previous_channel = Core.get_selected_channel()
             Core.IV_SelectChannel(channel_number)
@@ -344,9 +372,13 @@ class GenericFunctions():  # pylint: disable=too-many-public-methods
             The whole scan runs under the driver lock and restores the
             previously selected channel afterwards, so it does not interleave
             with other threads. The serial number is read only for channels
-            that have a device behind them; it is empty otherwise.'''
+            that have a device behind them; it is empty otherwise.
+
+            number_of_channels must be in 1..MAX_CHANNELS (32); the scan calls
+            IV_SelectChannel up to that value, which would open that many tabs.'''
         PyviumVerifiers.verify_driver_is_open()
         PyviumVerifiers.verify_iviumsoft_is_running()
+        _verify_channel_number(number_of_channels)
         statuses = []
         with Core.get_lock():
             previous_channel = Core.get_selected_channel()
@@ -381,10 +413,13 @@ class GenericFunctions():  # pylint: disable=too-many-public-methods
             restoring a previous channel would only flip the focused tab away
             (the connection itself persists regardless of the active tab).
 
+            channel must be in 1..MAX_CHANNELS (32), else ValueError.
+
             Raises DeviceNotConnectedToIviumSoftError if the serial number is
             not in the available device list.'''
         PyviumVerifiers.verify_driver_is_open()
         PyviumVerifiers.verify_iviumsoft_is_running()
+        _verify_channel_number(channel)
         with Core.get_lock():
             Core.IV_SelectChannel(channel)
             if Core.IV_getdevicestatus() == 1:  # idle, a device is connected
