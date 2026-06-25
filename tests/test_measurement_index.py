@@ -64,6 +64,16 @@ def test_filter_by_serial(index_path):
         "DataServer_A_2021.sqlite", "DataServer_B_2023.sqlite"}
 
 
+def test_filter_by_serial_is_case_insensitive(index_path):
+    # IviumSoft stores the same device under different casing depending on its
+    # power source, so a serial filter must match regardless of case.
+    with MeasurementIndex(index_path) as index:
+        lower = index.entries(serialnumber="p33162")
+        upper = index.entries(serialnumber="P33162")
+    assert {e.file for e in lower} == {e.file for e in upper} == {
+        "DataServer_A_2021.sqlite", "DataServer_B_2023.sqlite"}
+
+
 def test_filter_by_technique_and_title_substring(index_path):
     with MeasurementIndex(index_path) as index:
         cycliscan = index.entries(technique="CycliScan")

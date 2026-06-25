@@ -79,9 +79,13 @@ class MeasurementIndex:
         '''Returns catalog entries matching the given filters (all optional).
 
             Equality filters: serialnumber, device_alias, technique, project,
-            operator. title_contains is a substring match. start_after/start_before
-            bound start_time (string comparison works for ISO-like timestamps).
-            Results are newest-first; limit caps the count.'''
+            operator. serialnumber is matched case-insensitively: IviumSoft records
+            the same device under different casing (e.g. "b47129" vs "B47129")
+            depending on its power source, so a case-sensitive match could miss the
+            live run and return an older finished one stored under the other casing.
+            title_contains is a substring match. start_after/start_before bound
+            start_time (string comparison works for ISO-like timestamps). Results
+            are newest-first; limit caps the count.'''
         if self._connection is None:
             raise RuntimeError(
                 "MeasurementIndex is not open; use it as a context manager or call open().")
@@ -91,7 +95,9 @@ class MeasurementIndex:
                               ("technique", technique), ("project", project),
                               ("operator", operator)):
             if value is not None:
-                conditions.append(f"{column} = ?")
+                # Serial numbers are case-insensitive identifiers; the rest stay exact.
+                collate = " COLLATE NOCASE" if column == "serialnumber" else ""
+                conditions.append(f"{column} = ?{collate}")
                 params.append(value)
         if title_contains is not None:
             conditions.append("title LIKE ?")
