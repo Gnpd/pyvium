@@ -48,6 +48,13 @@ pip install pyvium==0.3.0rc1
   invalidated by `open_driver` / `close_driver` and the instance manager.
 - **Terminology glossary** (`docs/terminology.md`) for *device* vs *instance* vs
   *channel*.
+- **Full `IV_selectdevice_*` Core bindings.** Every scoped one-call function from
+  IviumSoft 4.1242 (39 in total, across generic/direct/WE32/method-mode) is now
+  bound on `Core` for callers who use the raw DLL layer directly. These have no
+  `Pyvium` counterpart (the high-level API scopes instances via `on_instance`);
+  they are `IV_selectdevice` + the base call fused and leave the selection parked
+  on the target instance. A coverage test guards that `Core` binds every function
+  declared in the bundled header.
 
 ### Changed
 

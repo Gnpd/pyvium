@@ -14,6 +14,15 @@ ffi.cdef("""
     long __stdcall IV_getdatafromline(long *pointnr, long *scannr, double *x, double *y, double *z);
     long __stdcall IV_UpdateTemperature(double *value);
     long __stdcall IV_getDbFileName(char *fname);
+    long __stdcall IV_selectdevice_readmethod(long *devnr, char *fname);
+    long __stdcall IV_selectdevice_savemethod(long *devnr, char *fname);
+    long __stdcall IV_selectdevice_startmethod(long *devnr, char *fname);
+    long __stdcall IV_selectdevice_abort(long *devnr);
+    long __stdcall IV_selectdevice_savedata(long *devnr, char *fname);
+    long __stdcall IV_selectdevice_savedataset(long *devnr, char *fname);
+    long __stdcall IV_selectdevice_setmethodparameter(long *devnr, char *parname, char *parvalue);
+    long __stdcall IV_selectdevice_Ndatapoints(long *devnr, long *value);
+    long __stdcall IV_selectdevice_getdata(long *devnr, long *pointnr, double *x, double *y, double *z);
 """)
 
 
@@ -126,6 +135,107 @@ class MethodModeFunctions(CoreBase):
         result_code = CoreBase.get_lib().IV_getdatafromline(
             selected_data_point_index_ptr,
             selected_line_index_ptr,
+            measured_value1_ptr,
+            measured_value2_ptr,
+            measured_value3_ptr)
+        return result_code, measured_value1_ptr[0], measured_value2_ptr[0], measured_value3_ptr[0]
+
+    # --- selectdevice variants (scoped to an IviumSoft instance) ----------
+    # One-call forms taking a leading IviumSoft instance number. Like all
+    # selectdevice variants these are IV_selectdevice + the base call fused:
+    # they leave the global selection parked on that instance and do NOT
+    # restore it (see IV_selectdevice_getdevicestatus). The DLL exposes no
+    # scoped IV_getdatafromline, so that one has no selectdevice variant.
+
+    @staticmethod
+    def IV_selectdevice_readmethod(instance: int, method_file_path: str) -> tuple[int, str]:
+        '''Scoped IV_readmethod for the given IviumSoft instance.'''
+        instance_ptr = ffi.new(LONG_PTR, instance)
+        method_file_path_ptr = ffi.new(
+            CHAR_ARRAY, method_file_path.encode(UTF_ENCODING))
+        result_code = CoreBase.get_lib().IV_selectdevice_readmethod(
+            instance_ptr, method_file_path_ptr)
+        return result_code, ffi.string(method_file_path_ptr).decode(UTF_ENCODING)
+
+    @staticmethod
+    def IV_selectdevice_savemethod(instance: int, method_file_path: str) -> tuple[int, str]:
+        '''Scoped IV_savemethod for the given IviumSoft instance.'''
+        instance_ptr = ffi.new(LONG_PTR, instance)
+        method_file_path_ptr = ffi.new(
+            CHAR_ARRAY, method_file_path.encode(UTF_ENCODING))
+        result_code = CoreBase.get_lib().IV_selectdevice_savemethod(
+            instance_ptr, method_file_path_ptr)
+        return result_code, ffi.string(method_file_path_ptr).decode(UTF_ENCODING)
+
+    @staticmethod
+    def IV_selectdevice_startmethod(instance: int, method_file_path: str = '') -> tuple[int, str]:
+        '''Scoped IV_startmethod for the given IviumSoft instance.
+            An empty path starts the presently loaded procedure.'''
+        instance_ptr = ffi.new(LONG_PTR, instance)
+        method_file_path_ptr = ffi.new(
+            CHAR_ARRAY, method_file_path.encode(UTF_ENCODING))
+        result_code = CoreBase.get_lib().IV_selectdevice_startmethod(
+            instance_ptr, method_file_path_ptr)
+        return result_code, ffi.string(method_file_path_ptr).decode(UTF_ENCODING)
+
+    @staticmethod
+    def IV_selectdevice_abort(instance: int) -> int:
+        '''Scoped IV_abort for the given IviumSoft instance.'''
+        instance_ptr = ffi.new(LONG_PTR, instance)
+        return CoreBase.get_lib().IV_selectdevice_abort(instance_ptr)
+
+    @staticmethod
+    def IV_selectdevice_savedata(instance: int, method_data_file_path: str) -> tuple[int, str]:
+        '''Scoped IV_savedata for the given IviumSoft instance.'''
+        instance_ptr = ffi.new(LONG_PTR, instance)
+        method_data_file_path_ptr = ffi.new(
+            CHAR_ARRAY, method_data_file_path.encode(UTF_ENCODING))
+        result_code = CoreBase.get_lib().IV_selectdevice_savedata(
+            instance_ptr, method_data_file_path_ptr)
+        return result_code, ffi.string(method_data_file_path_ptr).decode(UTF_ENCODING)
+
+    @staticmethod
+    def IV_selectdevice_savedataset(instance: int, file_path: str) -> tuple[int, str]:
+        '''Scoped IV_savedataset for the given IviumSoft instance.'''
+        instance_ptr = ffi.new(LONG_PTR, instance)
+        file_path_ptr = ffi.new(CHAR_ARRAY, file_path.encode(UTF_ENCODING))
+        result_code = CoreBase.get_lib().IV_selectdevice_savedataset(
+            instance_ptr, file_path_ptr)
+        return result_code, ffi.string(file_path_ptr).decode(UTF_ENCODING)
+
+    @staticmethod
+    def IV_selectdevice_setmethodparameter(
+        instance: int, parameter_name: str, parameter_value: str
+    ) -> int:
+        '''Scoped IV_setmethodparameter for the given IviumSoft instance.'''
+        instance_ptr = ffi.new(LONG_PTR, instance)
+        parameter_name_ptr = ffi.new(
+            CHAR_ARRAY, parameter_name.encode(UTF_ENCODING))
+        parameter_value_ptr = ffi.new(
+            CHAR_ARRAY, parameter_value.encode(UTF_ENCODING))
+        return CoreBase.get_lib().IV_selectdevice_setmethodparameter(
+            instance_ptr, parameter_name_ptr, parameter_value_ptr)
+
+    @staticmethod
+    def IV_selectdevice_Ndatapoints(instance: int) -> tuple[int, int]:
+        '''Scoped IV_Ndatapoints for the given IviumSoft instance.'''
+        instance_ptr = ffi.new(LONG_PTR, instance)
+        data_point_ptr = ffi.new(LONG_PTR)
+        result_code = CoreBase.get_lib().IV_selectdevice_Ndatapoints(
+            instance_ptr, data_point_ptr)
+        return result_code, data_point_ptr[0]
+
+    @staticmethod
+    def IV_selectdevice_getdata(instance: int, data_point_index: int) -> tuple[int, float, float, float]:
+        '''Scoped IV_getdata for the given IviumSoft instance.'''
+        instance_ptr = ffi.new(LONG_PTR, instance)
+        selected_data_point_index_ptr = ffi.new(LONG_PTR, data_point_index)
+        measured_value1_ptr = ffi.new(DOUBLE_PTR)
+        measured_value2_ptr = ffi.new(DOUBLE_PTR)
+        measured_value3_ptr = ffi.new(DOUBLE_PTR)
+        result_code = CoreBase.get_lib().IV_selectdevice_getdata(
+            instance_ptr,
+            selected_data_point_index_ptr,
             measured_value1_ptr,
             measured_value2_ptr,
             measured_value3_ptr)

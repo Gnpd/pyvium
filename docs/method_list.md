@@ -105,6 +105,17 @@ handles expose the full Pyvium API scoped to an instance (and channel). These or
 | :heavy_check_mark: `Pyvium.on_channel(m)` | Context manager: select channel tab `m` atomically; nest inside `on_instance` |
 | :heavy_check_mark: `Pyvium.instance(n).channel(m)` -> `PyviumChannel` | Handle bound to instance `n` + channel `m`; every call scopes both selections |
 
+#### Native `IV_selectdevice_*` variants (Core only)
+
+IviumSoft 4.1242 (DLL v203) added scoped one-call forms of the direct-mode, WE32 and method-mode
+functions, each taking a leading instance number (e.g. `IV_selectdevice_setpotential(n, value)`).
+All of them are bound on `Core` (:heavy_check_mark:) for callers using the raw DLL layer directly;
+they have **no** `Pyvium` counterpart, since the high-level API scopes instances through
+`on_instance` / `Pyvium.instance(n)` above. They are `IV_selectdevice` + the base call fused: they
+leave the global selection parked on the target instance and do not restore it, so they are not
+selection-safe polls (see `IV_selectdevice_getdevicestatus`). The DLL exposes no scoped `connect`,
+`readSN`, `SelectSn`, `SelectChannel` or `getdatafromline`, so those have no variant.
+
 ### Instance lifecycle management
 
 `IviumsoftInstanceManager` launches, tracks, adopts and closes IviumSoft processes, mapping each
