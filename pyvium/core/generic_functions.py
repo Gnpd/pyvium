@@ -8,6 +8,7 @@ ffi.cdef(
     long __stdcall IV_MaxDevices();
     void __stdcall IV_selectdevice(long *devnr);
     long __stdcall IV_getdevicestatus();
+    long __stdcall IV_selectdevice_getdevicestatus(long *devnr);
     long __stdcall IV_readSN(char *sntext);
     long __stdcall IV_connect(long* devconnect);
     long __stdcall IV_VersionHost(long *version);
@@ -54,6 +55,23 @@ class GenericFunctions(CoreBase):
         """It returns -1 (no IviumSoft), 0 (not connected), 1 (available_idle), 2 (available_busy),
         3 (no device available)"""
         return CoreBase.get_lib().IV_getdevicestatus()
+
+    @staticmethod
+    def IV_selectdevice_getdevicestatus(iviumsoft_instance_number: int) -> int:
+        """Returns the device status for a given IviumSoft instance in a single
+        call. Same codes as IV_getdevicestatus: -1 (no IviumSoft), 0 (not
+        connected), 1 (available_idle), 2 (available_busy), 3 (no device
+        available).
+
+        NOTE: hardware-confirmed this is IV_selectdevice + IV_getdevicestatus
+        fused; it leaves the global selection parked on iviumsoft_instance_number
+        (it does NOT restore the previous selection). It is not a
+        selection-safe poll: callers holding a selection must restore it, and
+        this does not update the CoreBase selected-instance shadow. Prefer
+        Pyvium.on_instance / Pyvium.instance(n).get_device_status when the
+        current selection must be preserved."""
+        instance_number_ptr = ffi.new(LONG_PTR, iviumsoft_instance_number)
+        return CoreBase.get_lib().IV_selectdevice_getdevicestatus(instance_number_ptr)
 
     @staticmethod
     def IV_readSN() -> tuple[int, str]:
