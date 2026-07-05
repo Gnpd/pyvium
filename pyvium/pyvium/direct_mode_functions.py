@@ -279,7 +279,7 @@ class DirectModeFunctions():
             instance: IviumSoft instance number; value in Ampere'''
         PyviumVerifiers.verify_driver_is_open()
         PyviumVerifiers.verify_iviumsoft_is_running()
-        result_code = Core.IV_selectdevicesetvalue(instance, 0, value)
+        result_code = Core.IV_selectdevice_setcurrent(instance, value)
         PyviumVerifiers.verify_result_code(result_code, "set_device_current")
 
     @staticmethod
@@ -288,7 +288,7 @@ class DirectModeFunctions():
             instance: IviumSoft instance number; value in Volt'''
         PyviumVerifiers.verify_driver_is_open()
         PyviumVerifiers.verify_iviumsoft_is_running()
-        result_code = Core.IV_selectdevicesetvalue(instance, 1, value)
+        result_code = Core.IV_selectdevice_setpotential(instance, value)
         PyviumVerifiers.verify_result_code(result_code, "set_device_potential")
 
     @staticmethod
