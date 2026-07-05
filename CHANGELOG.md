@@ -48,6 +48,10 @@ pip install pyvium==0.3.0rc1
   invalidated by `open_driver` / `close_driver` and the instance manager.
 - **Terminology glossary** (`docs/terminology.md`) for *device* vs *instance* vs
   *channel*.
+- **New/expanded getting-started notebooks** for the 0.3 features: `02` now covers
+  thread-safe instance/channel scoping and multichannel management; new
+  `10_instance_lifecycle_management` (the `IviumsoftInstanceManager`) and
+  `11_sqlite_measurement_readers` (runnable offline against a synthetic DataServer DB).
 - **Full `IV_selectdevice_*` Core bindings.** Every scoped one-call function from
   IviumSoft 4.1242 (39 in total, across generic/direct/WE32/method-mode) is now
   bound on `Core` for callers who use the raw DLL layer directly. These have no
