@@ -52,6 +52,9 @@ pip install pyvium==0.3.0rc1
   thread-safe instance/channel scoping and multichannel management; new
   `10_instance_lifecycle_management` (the `IviumsoftInstanceManager`) and
   `11_sqlite_measurement_readers` (runnable offline against a synthetic DataServer DB).
+- **Public device-status labels.** `DEVICE_STATUS_LABELS` (read-only code -> label
+  map) and `device_status_label(code)` are now exported from `pyvium`, so consumers
+  no longer need to reach into the private `_STATUS_LABELS`.
 - **Full `IV_selectdevice_*` Core bindings.** Every scoped one-call function from
   IviumSoft 4.1242 (39 in total, across generic/direct/WE32/method-mode) is now
   bound on `Core` for callers who use the raw DLL layer directly. These have no
@@ -78,6 +81,10 @@ pip install pyvium==0.3.0rc1
 - `get_current_trace`, `get_current_we2_trace`, and `get_potential_trace` now return
   the list of samples instead of the raw `(result_code, values)` tuple. The DLL crash
   that previously made these calls unusable is fixed in IviumSoft 4.1242.
+- `tools.column_labels()` now defaults to the hardware-confirmed mapping
+  (`y=potential, z=current`); it previously shipped the opposite provisional labels.
+  The readers already expose the raw `x/y/z/q` columns on `DataPoint`, so this only
+  affects the optional label helper.
 
 ### Compatibility
 

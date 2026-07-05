@@ -1,6 +1,7 @@
 import warnings
 from contextlib import contextmanager
 from dataclasses import dataclass
+from types import MappingProxyType
 
 from ..core import Core
 from ..errors import (DeviceNotConnectedToIviumSoftError,
@@ -14,6 +15,18 @@ _STATUS_LABELS = {
     2: 'available_busy',
     3: 'no device available',
 }
+
+# Public, read-only view of the device-status code -> label map, so consumers do
+# not have to reach into this private module. Read-only so callers cannot mutate
+# the shared mapping.
+DEVICE_STATUS_LABELS = MappingProxyType(_STATUS_LABELS)
+
+
+def device_status_label(status_code: int) -> str:
+    '''Human-readable label for a device status code (as returned by
+        get_device_status / IV_getdevicestatus): -1..3. Falls back to a readable
+        "unknown (code)" string instead of raising on an unexpected code.'''
+    return _STATUS_LABELS.get(status_code, f"unknown ({status_code})")
 # Status codes for which IV_readSN cannot return a meaningful serial number
 # (no device behind the channel), so the scan skips the read for them.
 _NO_SERIAL_STATUS = (-1, 0, 3)

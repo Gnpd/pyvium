@@ -46,6 +46,9 @@ autopep8 = "^2.0.0"
 pytest = "^8.3.5"
 psutil = "^7.0.0"
 
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+
 [build-system]
 build-backend = "poetry.core.masonry.api"
 requires = ["poetry-core"]

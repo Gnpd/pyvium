@@ -104,10 +104,11 @@ def decode_status(statusbyte: int) -> dict:
 
 # Generic meaning of the point table's x/y/z/q columns. The DLL exposes the same
 # per-technique triplet through IV_getdata (d1/d2/d3) and the meaning depends on
-# the technique; in the dbver-9 samples x is the control/time axis, y the current,
-# z the potential and q the charge. This is PROVISIONAL and not yet confirmed
-# per technique; raw columns are always available on DataPoint regardless of labels.
-_DEFAULT_COLUMN_LABELS = {"x": "x", "y": "current", "z": "potential", "q": "charge"}
+# the technique; x is the control/time axis and q the charge. y is the potential
+# and z the current. Still treat this as a best-effort default that
+# may vary per technique (add confirmed cases to _TECHNIQUE_COLUMN_LABELS); the
+# raw x/y/z/q columns are always available on DataPoint regardless of labels.
+_DEFAULT_COLUMN_LABELS = {"x": "x", "y": "potential", "z": "current", "q": "charge"}
 
 # Per-technique overrides, keyed by the index.sqlite "technique" string. Empty
 # until confirmed against captured sample files.
