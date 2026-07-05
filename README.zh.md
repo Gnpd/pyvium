@@ -30,7 +30,7 @@ IviumSoft 下载地址：
 
 https://www.ivium.com/support/#Software%20update
 
-当前版本的 PYVIUM 包含 IviumSoft **4.1239** 版本的 DLL。
+当前版本的 PYVIUM 包含 IviumSoft **4.1242** 版本的 DLL。
 
 ---
 

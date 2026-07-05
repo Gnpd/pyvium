@@ -30,7 +30,7 @@ Descarga IviumSoft aquí:
 
 https://www.ivium.com/support/#Software%20update
 
-Esta versión de PYVIUM incluye la DLL de la versión **4.1239** de IviumSoft.
+Esta versión de PYVIUM incluye la DLL de la versión **4.1242** de IviumSoft.
 
 ---
 

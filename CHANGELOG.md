@@ -55,11 +55,18 @@ pip install pyvium==0.3.0rc1
   DLL's actual semantics (`IV_selectdevice` selects an instance, not hardware).
 - Documentation: documented the SQLite readers, confirmed driver instance numbering
   is stable after a close, and corrected the terminology source reference.
+- Bundled DLL updated to IviumSoft release 4.1242 (DLL version 203). This release
+  removed `IV_selectdevicesetvalue(int, int, double)`, so `set_device_current` /
+  `set_device_potential` now call the dedicated `IV_selectdevice_setcurrent` /
+  `IV_selectdevice_setpotential` functions instead (public signatures unchanged).
 
 ### Fixed
 
 - CSV export no longer writes blank lines between rows on Windows
   (`csv.writer` now controls the line endings).
+- `get_current_trace`, `get_current_we2_trace`, and `get_potential_trace` now return
+  the list of samples instead of the raw `(result_code, values)` tuple. The DLL crash
+  that previously made these calls unusable is fixed in IviumSoft 4.1242.
 
 ### Compatibility
 

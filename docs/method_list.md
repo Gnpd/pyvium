@@ -58,8 +58,8 @@
 | :heavy_check_mark: get_current_trace(int, float)        | :heavy_check_mark: IV_getcurrenttrace(npoints, rate, values)        |
 | :heavy_check_mark: get_current_we2_trace(int, float)    | :heavy_check_mark: IV_getcurrentWE2trace(npoints, rate, values)     |
 | :heavy_check_mark: get_potential_trace(int, float)      | :heavy_check_mark: IV_getpotentialtrace(npoints, rate, values)      |
-| :heavy_check_mark: set_device_current(int, float)       | :heavy_check_mark: IV_selectdevicesetvalue(int, int, float)     |
-| :heavy_check_mark: set_device_potential(int, float)     |                                                                 |
+| :heavy_check_mark: set_device_current(int, float)       | :heavy_check_mark: IV_selectdevice_setcurrent(int, float)       |
+| :heavy_check_mark: set_device_potential(int, float)     | :heavy_check_mark: IV_selectdevice_setpotential(int, float)     |
 | :small_orange_diamond: set_we32_channel(int)            | :small_orange_diamond: IV_we32setchannel(index)                 |
 | :small_orange_diamond: set_we32_offset(int, float)      | :small_orange_diamond: IV_we32setoffset(index, value)           |
 | :small_orange_diamond: set_we32_offsets(int, list)      | :small_orange_diamond: IV_we32setoffsets(nval, values)          |
