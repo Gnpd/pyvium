@@ -5,6 +5,33 @@ All notable changes to PYVIUM are documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [PEP 440](https://peps.python.org/pep-0440/) versioning.
 
+## [0.3.0rc2] - 2026-07-10
+
+Second release candidate for 0.3.0. Extends the SQLite measurement readers with
+task-level (measurementpart) scoping so a large cycliscan (thousands of parts,
+millions of points) can be read one task at a time instead of whole. Install it
+explicitly (pip ignores pre-releases by default):
+
+```
+pip install pyvium==0.3.0rc2
+```
+
+### Added
+
+- **Part/cycle scoping and a point cap on `MeasurementReader`.** `read_points` and
+  `read_impedance` gain `measurementpart_id`, `cycle`, and `limit` parameters, all
+  pushed into the SQL query, so the reader never materialises more rows than asked;
+  `limit` combines with `after_point_id` to page a bounded window.
+- **`MeasurementReader.part_summaries()`** returns one `MeasurementPartSummary` per
+  non-empty part (its `point_count` and `t` range), for building a task picker
+  without touching point data.
+- **`MeasurementReader.latest_part_id()`** returns the highest part id that has
+  points (the current task), for following a live run.
+- New dataclass `MeasurementPartSummary`, exported from `pyvium.tools`.
+
+All additive and backward compatible: existing `read_points()` / `read_impedance()`
+calls behave exactly as before. Read-only and hardware-free.
+
 ## [0.3.0rc1] - 2026-06-19
 
 Release candidate for 0.3.0. It bundles multi-instance and multichannel control,
@@ -93,4 +120,5 @@ pip install pyvium==0.3.0rc1
   (and, for many calls, connected hardware). The SQLite readers and IDF/CSV tools
   are the exception: they run without the DLL or hardware.
 
+[0.3.0rc2]: https://github.com/Gnpd/pyvium/releases/tag/v0.3.0rc2
 [0.3.0rc1]: https://github.com/Gnpd/pyvium/releases/tag/v0.3.0rc1
