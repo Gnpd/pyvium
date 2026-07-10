@@ -113,6 +113,55 @@ def test_read_impedance(db_path):
     assert eis[0].z_re == 1.12 and eis[0].z_im == -1.49
 
 
+def test_read_points_scoped_to_a_part(db_path):
+    # Part 2 holds points 3,4,5; scoping keeps a large cycliscan bounded.
+    with MeasurementReader(db_path) as reader:
+        part2 = reader.read_points(measurementpart_id=2)
+        part1 = reader.read_points(measurementpart_id=1)
+    assert [p.point_id for p in part2] == [3, 4, 5]
+    assert [p.point_id for p in part1] == [1, 2]
+
+
+def test_read_points_by_cycle(db_path):
+    with MeasurementReader(db_path) as reader:
+        cycle1 = reader.read_points(cycle=1)
+        cycle9 = reader.read_points(cycle=9)  # no such cycle
+    assert [p.point_id for p in cycle1] == [1, 2, 3, 4, 5]
+    assert cycle9 == []
+
+
+def test_read_points_limit_is_a_hard_cap(db_path):
+    # limit truncates in SQL (first N in point_id order); combine with a cursor.
+    with MeasurementReader(db_path) as reader:
+        first_two = reader.read_points(limit=2)
+        next_two = reader.read_points(after_point_id=2, limit=2)
+    assert [p.point_id for p in first_two] == [1, 2]
+    assert [p.point_id for p in next_two] == [3, 4]
+
+
+def test_read_impedance_scoped_to_a_part(db_path):
+    # Both FRA points (4,5) belong to part 2; part 1 has none.
+    with MeasurementReader(db_path) as reader:
+        part2 = reader.read_impedance(measurementpart_id=2)
+        part1 = reader.read_impedance(measurementpart_id=1)
+    assert [p.point_id for p in part2] == [4, 5]
+    assert part1 == []
+
+
+def test_part_summaries(db_path):
+    with MeasurementReader(db_path) as reader:
+        summaries = reader.part_summaries()
+    assert [(s.measurementpart_id, s.point_count) for s in summaries] == [(1, 2), (2, 3)]
+    assert summaries[0].level == 1 and summaries[1].level == 2
+    # t-range spans the part's points (part 1: t 0.2..0.4).
+    assert summaries[0].t_min == 0.2 and summaries[0].t_max == 0.4
+
+
+def test_latest_part_id(db_path):
+    with MeasurementReader(db_path) as reader:
+        assert reader.latest_part_id() == 2
+
+
 def test_latest_point_id(db_path):
     with MeasurementReader(db_path) as reader:
         assert reader.latest_point_id() == 5

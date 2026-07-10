@@ -33,6 +33,21 @@ class MeasurementPart:  # pylint: disable=too-many-instance-attributes
 
 
 @dataclass
+class MeasurementPartSummary:
+    '''A measurementpart plus its point_count and t-range.
+
+        Lighter than reading a part's points: it lets a caller size and label each
+        task (e.g. a cycliscan with thousands of parts) for a picker without
+        touching the point data. Only parts that actually have points appear.'''
+    measurementpart_id: int
+    cycle: int | None
+    level: int | None
+    point_count: int
+    t_min: float | None
+    t_max: float | None
+
+
+@dataclass
 class DataPoint:  # pylint: disable=too-many-instance-attributes
     '''One measured point. x/y/z/q are the raw per-technique columns (see
         measurement_schema.column_labels); status decodes statusbyte.'''
@@ -162,11 +177,24 @@ class MeasurementReader:
             for row in rows]
 
     def read_points(self, measurement_id: int | None = None,
-                    after_point_id: int | None = None) -> list[DataPoint]:
+                    after_point_id: int | None = None,
+                    measurementpart_id: int | None = None,
+                    cycle: int | None = None,
+                    limit: int | None = None) -> list[DataPoint]:
         '''Returns the measured points in point_id order.
 
             after_point_id returns only points with a greater point_id, which is
-            how a live tailer fetches new data incrementally (WHERE point_id > ?).'''
+            how a live tailer fetches new data incrementally (WHERE point_id > ?).
+
+            measurementpart_id / cycle scope the read to one task / cycle of the
+            measurement -- essential for a large cycliscan, whose full point set
+            can be millions of rows while a single part is only hundreds.
+
+            limit is a hard SQL cap (LIMIT): it returns the first `limit` points in
+            point_id order, so the reader never materialises more than that. Combine
+            it with after_point_id to page a bounded window; on its own it truncates
+            (it does not decimate), so the caller must decide whether more remain
+            (e.g. by comparing against latest_point_id).'''
         self._require_open()
         measurement_id = self._resolve_measurement_id(measurement_id)
         present = self._table_columns("measurementpart")
@@ -178,18 +206,52 @@ class MeasurementReader:
             "FROM point p JOIN measurementpart mp ON mp.measurementpart_id = p.measurementpart_id "
             "WHERE mp.measurement_id = ?")
         params: list = [measurement_id]
+        if measurementpart_id is not None:
+            query += " AND p.measurementpart_id = ?"
+            params.append(measurementpart_id)
+        if cycle is not None:
+            query += " AND mp.cycle = ?"
+            params.append(cycle)
         if after_point_id is not None:
             query += " AND p.point_id > ?"
             params.append(after_point_id)
         query += " ORDER BY p.point_id"
+        if limit is not None:
+            query += " LIMIT ?"
+            params.append(limit)
         return [DataPoint(*[row[column] for column in _POINT_COLUMNS])
                 for row in self._connection.execute(query, params)]
 
+    def part_summaries(
+            self, measurement_id: int | None = None) -> list[MeasurementPartSummary]:
+        '''Returns one MeasurementPartSummary per non-empty measurementpart.
+
+            A single GROUP BY over point (indexed on measurementpart_id) yields
+            each task's point_count and t-range, so a picker over a large cycliscan
+            can list and size its tasks without reading any point data. Empty parts
+            are skipped.'''
+        self._require_open()
+        measurement_id = self._resolve_measurement_id(measurement_id)
+        rows = self._connection.execute(
+            "SELECT p.measurementpart_id, mp.cycle, mp.level, "
+            "COUNT(*) AS point_count, MIN(p.t) AS t_min, MAX(p.t) AS t_max "
+            "FROM point p JOIN measurementpart mp ON mp.measurementpart_id = p.measurementpart_id "
+            "WHERE mp.measurement_id = ? "
+            "GROUP BY p.measurementpart_id, mp.cycle, mp.level "
+            "ORDER BY p.measurementpart_id", (measurement_id,))
+        return [MeasurementPartSummary(
+            row["measurementpart_id"], row["cycle"], row["level"],
+            row["point_count"], row["t_min"], row["t_max"]) for row in rows]
+
     def read_impedance(self, measurement_id: int | None = None,
-                       after_point_id: int | None = None) -> list[ImpedancePoint]:
+                       after_point_id: int | None = None,
+                       measurementpart_id: int | None = None,
+                       cycle: int | None = None,
+                       limit: int | None = None) -> list[ImpedancePoint]:
         '''Returns the impedance/FRA points (frequency, Z', Z'') in point_id order.
 
-            after_point_id behaves as in read_points for incremental tailing.
+            after_point_id, measurementpart_id, cycle and limit behave exactly as
+            in read_points (incremental tailing, task/cycle scoping, hard SQL cap).
 
             Returns [] when the file has no pointfra table at all, which is the
             case for non-EIS techniques: a caller that does not know the technique
@@ -204,10 +266,19 @@ class MeasurementReader:
             "JOIN measurementpart mp ON mp.measurementpart_id = p.measurementpart_id "
             "WHERE mp.measurement_id = ?")
         params: list = [measurement_id]
+        if measurementpart_id is not None:
+            query += " AND p.measurementpart_id = ?"
+            params.append(measurementpart_id)
+        if cycle is not None:
+            query += " AND mp.cycle = ?"
+            params.append(cycle)
         if after_point_id is not None:
             query += " AND f.point_id > ?"
             params.append(after_point_id)
         query += " ORDER BY f.point_id"
+        if limit is not None:
+            query += " LIMIT ?"
+            params.append(limit)
         return [ImpedancePoint(row["point_id"], row["t"], row["f"], row["z1"],
                                row["z2"], row["ohr"], row["fraquality"])
                 for row in self._connection.execute(query, params)]
@@ -223,6 +294,19 @@ class MeasurementReader:
             "JOIN measurementpart mp ON mp.measurementpart_id = p.measurementpart_id "
             "WHERE mp.measurement_id = ?", (measurement_id,)).fetchone()
         return row["max_point_id"]
+
+    def latest_part_id(self, measurement_id: int | None = None) -> int | None:
+        '''Returns the highest measurementpart_id that has points, or None.
+
+            The "current task" of a live cycliscan: a viewer can scope to it to
+            keep a live plot bounded, and re-scope when it advances.'''
+        self._require_open()
+        measurement_id = self._resolve_measurement_id(measurement_id)
+        row = self._connection.execute(
+            "SELECT MAX(p.measurementpart_id) AS max_part_id FROM point p "
+            "JOIN measurementpart mp ON mp.measurementpart_id = p.measurementpart_id "
+            "WHERE mp.measurement_id = ?", (measurement_id,)).fetchone()
+        return row["max_part_id"]
 
     def to_csv(self, file_path: str, measurement_id: int | None = None) -> None:
         '''Exports the points (with a header row) to a CSV file.'''
