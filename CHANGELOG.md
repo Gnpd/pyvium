@@ -5,6 +5,33 @@ All notable changes to PYVIUM are documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [PEP 440](https://peps.python.org/pep-0440/) versioning.
 
+## [0.3.0rc3] - 2026-07-20
+
+Third release candidate for 0.3.0. Adds a whole-run overview and tail-scoped task
+summaries to `MeasurementReader`, so a still-growing measurement can be previewed
+and polled without re-reading the whole run. Install it explicitly (pip ignores
+pre-releases by default):
+
+```
+pip install pyvium==0.3.0rc3
+```
+
+### Added
+
+- **Whole-run overview via `point_small`.** `MeasurementReader.read_overview_points()`
+  returns IviumSoft's curated whole-run subset (~2-3% of points, spanning the entire
+  run) as full `DataPoint`s, giving a shape-representative preview instead of
+  `read_points(limit=N)`'s earliest-N slice. `MeasurementReader.has_overview()`
+  reports whether the file carries the index; `read_overview_points` raises when it
+  is absent (a missing curation index is not the same as an empty point set).
+- **Tail-scoped `part_summaries`.** `MeasurementReader.part_summaries()` gains a
+  `from_part_id` parameter, an inclusive `measurementpart_id` lower bound that seeks
+  via the existing index so a live poller refreshes only the still-growing tail
+  instead of re-scanning the whole run.
+
+All additive and backward compatible: existing `part_summaries()` calls behave
+exactly as before. Read-only and hardware-free.
+
 ## [0.3.0rc2] - 2026-07-10
 
 Second release candidate for 0.3.0. Extends the SQLite measurement readers with
