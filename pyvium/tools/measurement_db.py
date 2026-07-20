@@ -7,7 +7,8 @@ is still writing (see connect_readonly).
 from dataclasses import dataclass
 
 from .data_processing_functions import DataProcessing
-from .measurement_schema import (connect_readonly, decode_status,
+from .measurement_schema import (UnsupportedDatabaseVersionError,
+                                 connect_readonly, decode_status,
                                  read_database_version, verify_database_version)
 
 
@@ -222,23 +223,103 @@ class MeasurementReader:
         return [DataPoint(*[row[column] for column in _POINT_COLUMNS])
                 for row in self._connection.execute(query, params)]
 
+    def has_overview(self) -> bool:
+        '''Whether this file carries a point_small curation index.
+
+            point_small is a whole-run subset IviumSoft curates for previewing a
+            measurement without reading every point (2-2.5% of point in sample
+            files, spanning the entire run). Detected the same way as the other
+            optional tables (pointfra/mux/wex via _table_columns): older
+            DatabaseVersions or files without curation simply report False, no
+            exception. Callers should check this before read_overview_points,
+            which raises rather than returning [] when the table is absent.'''
+        self._require_open()
+        return bool(self._table_columns("point_small"))
+
+    def read_overview_points(self, measurement_id: int | None = None,
+                             after_point_id: int | None = None,
+                             cycle: int | None = None,
+                             limit: int | None = None) -> list[DataPoint]:
+        '''Returns the point_small-curated subset of points, in point_id order.
+
+            A shape-representative preview of the whole run, unlike
+            read_points(limit=N) which returns only the earliest N points. Same
+            return shape as read_points (full DataPoint objects, with
+            cycle/level/muxchannel/wexchannel from the joined measurementpart),
+            sourced through point_small -> point -> measurementpart. There is no
+            measurementpart_id parameter: curation is whole-run, and a single
+            task's own point count is already small enough to read in full via
+            read_points.
+
+            after_point_id, cycle and limit behave exactly as in read_points
+            (incremental tailing, cycle scoping, hard SQL cap).
+
+            Raises UnsupportedDatabaseVersionError when the file has no
+            point_small table -- check has_overview first. Unlike read_impedance
+            (which returns [] when pointfra is absent), a missing curation index
+            and an empty point set are different things a caller scoping a
+            whole-run preview needs to tell apart.'''
+        self._require_open()
+        if not self._table_columns("point_small"):
+            raise UnsupportedDatabaseVersionError(
+                "This file has no point_small curation index; call has_overview() "
+                "first, or use read_points() for the raw point stream.")
+        measurement_id = self._resolve_measurement_id(measurement_id)
+        present = self._table_columns("measurementpart")
+        mux = "mp.muxchannel" if "muxchannel" in present else "NULL"
+        wex = "mp.wexchannel" if "wexchannel" in present else "NULL"
+        query = (
+            "SELECT p.point_id, p.t, p.x, p.y, p.z, p.q, p.statusbyte, "
+            f"p.measurementpart_id, mp.cycle, mp.level, {mux} AS muxchannel, {wex} AS wexchannel "
+            "FROM point_small ps JOIN point p ON p.point_id = ps.point_id "
+            "JOIN measurementpart mp ON mp.measurementpart_id = p.measurementpart_id "
+            "WHERE mp.measurement_id = ?")
+        params: list = [measurement_id]
+        if cycle is not None:
+            query += " AND mp.cycle = ?"
+            params.append(cycle)
+        if after_point_id is not None:
+            query += " AND p.point_id > ?"
+            params.append(after_point_id)
+        query += " ORDER BY p.point_id"
+        if limit is not None:
+            query += " LIMIT ?"
+            params.append(limit)
+        return [DataPoint(*[row[column] for column in _POINT_COLUMNS])
+                for row in self._connection.execute(query, params)]
+
     def part_summaries(
-            self, measurement_id: int | None = None) -> list[MeasurementPartSummary]:
+            self, measurement_id: int | None = None,
+            from_part_id: int | None = None) -> list[MeasurementPartSummary]:
         '''Returns one MeasurementPartSummary per non-empty measurementpart.
 
             A single GROUP BY over point (indexed on measurementpart_id) yields
             each task's point_count and t-range, so a picker over a large cycliscan
             can list and size its tasks without reading any point data. Empty parts
-            are skipped.'''
+            are skipped.
+
+            from_part_id scopes the GROUP BY to measurementpart_id >= from_part_id,
+            so a live-polling caller can refresh just the still-growing tail of a
+            running measurement instead of re-scanning the whole run each time
+            (the difference between a ~3ms seek and a run-sized scan on a large
+            file). The bound is inclusive -- deliberately unlike after_point_id's
+            exclusive '>' elsewhere -- so the caller's last-known current task,
+            whose point_count is still growing, gets refreshed rather than only
+            picking up brand-new tasks. Unchanged behaviour when None.'''
         self._require_open()
         measurement_id = self._resolve_measurement_id(measurement_id)
-        rows = self._connection.execute(
+        query = (
             "SELECT p.measurementpart_id, mp.cycle, mp.level, "
             "COUNT(*) AS point_count, MIN(p.t) AS t_min, MAX(p.t) AS t_max "
             "FROM point p JOIN measurementpart mp ON mp.measurementpart_id = p.measurementpart_id "
-            "WHERE mp.measurement_id = ? "
-            "GROUP BY p.measurementpart_id, mp.cycle, mp.level "
-            "ORDER BY p.measurementpart_id", (measurement_id,))
+            "WHERE mp.measurement_id = ?")
+        params: list = [measurement_id]
+        if from_part_id is not None:
+            query += " AND p.measurementpart_id >= ?"
+            params.append(from_part_id)
+        query += (" GROUP BY p.measurementpart_id, mp.cycle, mp.level "
+                  "ORDER BY p.measurementpart_id")
+        rows = self._connection.execute(query, params)
         return [MeasurementPartSummary(
             row["measurementpart_id"], row["cycle"], row["level"],
             row["point_count"], row["t_min"], row["t_max"]) for row in rows]
