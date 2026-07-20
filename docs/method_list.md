@@ -154,7 +154,9 @@ hardware needed. See `docs/terminology.md` for device/instance/channel terms.
 | :heavy_check_mark: `.measurements()` / `.method_parameters()` / `.measurement_parts()` | measurement rows / method key-values / cycle-level-channel parts |
 | :heavy_check_mark: `.read_points(after_point_id=None)` | Data points (t,x,y,z,q + decoded status + part context); `after_point_id` for incremental tailing |
 | :heavy_check_mark: `.read_impedance(after_point_id=None)` | FRA/EIS points (frequency, Z', Z'') |
-| :heavy_check_mark: `.latest_point_id()` | Highest point_id (tailer catch-up cursor) |
+| :heavy_check_mark: `.has_overview()` / `.read_overview_points(...)` | Whole-run curated preview via the `point_small` index (raises if absent; check `has_overview` first) |
+| :heavy_check_mark: `.part_summaries(from_part_id=None)` | Per-task point_count and t-range; `from_part_id` scopes the GROUP BY to the still-growing tail (inclusive) |
+| :heavy_check_mark: `.latest_point_id()` / `.latest_part_id()` | Highest point_id / measurementpart_id (tailer catch-up cursors) |
 | :heavy_check_mark: `.to_csv(path)` / `.to_dataframe()` | Export points to CSV / pandas (pandas optional, lazy import) |
 | :heavy_check_mark: `MeasurementIndex(path)` | Context-managed reader for index.sqlite |
 | :heavy_check_mark: `.entries(...)` | Filter the catalog (serial, device, technique, title, project, operator, date range, limit) |
