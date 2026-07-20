@@ -24,6 +24,8 @@ CREATE TABLE point (point_id INTEGER PRIMARY KEY, measurementpart_id INTEGER,
     t REAL, x REAL, y REAL, z REAL, q REAL, statusbyte INTEGER);
 CREATE TABLE pointfra (point_id INTEGER, f REAL, z1 REAL, z2 REAL, ohr REAL,
     fraquality REAL);
+CREATE TABLE point_small (point_id INTEGER PRIMARY KEY, measurement_id INTEGER,
+    reason INTEGER);
 """
 
 # statusbyte 131076 = bit2 (iovl) set + current-range index 2 in bits 16..23.
@@ -53,6 +55,9 @@ def _build(path, db_version="9"):
     con.executemany("INSERT INTO pointfra VALUES (?,?,?,?,?,?)", [
         (4, 10.0, 1.12, -1.49, 0.00085, 0.999),
         (5, 11.7, 0.45, -0.025, 0.00095, 0.999)])
+    # Curated whole-run subset: points 1 (part 1), 3 and 5 (part 2).
+    con.executemany("INSERT INTO point_small VALUES (?,?,?)", [
+        (1, 1, 0), (3, 1, 1), (5, 1, 2)])
     con.commit()
     con.close()
     return path
@@ -155,6 +160,63 @@ def test_part_summaries(db_path):
     assert summaries[0].level == 1 and summaries[1].level == 2
     # t-range spans the part's points (part 1: t 0.2..0.4).
     assert summaries[0].t_min == 0.2 and summaries[0].t_max == 0.4
+
+
+def test_part_summaries_from_part_id_scopes_to_tail(db_path):
+    # Inclusive bound: from_part_id=2 keeps part 2 (a live caller's current task
+    # whose count is still growing), drops part 1.
+    with MeasurementReader(db_path) as reader:
+        tail = reader.part_summaries(from_part_id=2)
+        whole = reader.part_summaries(from_part_id=1)
+    assert [(s.measurementpart_id, s.point_count) for s in tail] == [(2, 3)]
+    assert [s.measurementpart_id for s in whole] == [1, 2]
+
+
+def test_has_overview_true_when_point_small_present(db_path):
+    with MeasurementReader(db_path) as reader:
+        assert reader.has_overview() is True
+
+
+def test_read_overview_points_returns_curated_subset(db_path):
+    # point_small curates points 1, 3, 5; overview joins full part context.
+    with MeasurementReader(db_path) as reader:
+        overview = reader.read_overview_points()
+        newer = reader.read_overview_points(after_point_id=1)
+        capped = reader.read_overview_points(limit=2)
+        by_cycle = reader.read_overview_points(cycle=1)
+    assert [p.point_id for p in overview] == [1, 3, 5]
+    assert overview[1].measurementpart_id == 2 and overview[1].level == 2
+    assert overview[0].wexchannel == 1        # part context joined through
+    assert [p.point_id for p in newer] == [3, 5]   # after_point_id is exclusive
+    assert [p.point_id for p in capped] == [1, 3]  # hard cap in point_id order
+    assert [p.point_id for p in by_cycle] == [1, 3, 5]
+
+
+def test_overview_absent_reports_false_and_raises(tmp_path):
+    # A file without a point_small table: has_overview False, reads raise (a
+    # missing curation index is not the same as an empty point set).
+    path = str(tmp_path / "no_overview.sqlite")
+    con = sqlite3.connect(path)
+    con.executescript("""
+        CREATE TABLE metadata (key TEXT, value TEXT);
+        CREATE TABLE measurement (measurement_id INTEGER PRIMARY KEY, start_time TEXT,
+            end_time TEXT, mt BLOB);
+        CREATE TABLE measurementpart (measurementpart_id INTEGER PRIMARY KEY,
+            measurement_id INTEGER, cycle INTEGER, level INTEGER, tstep INTEGER,
+            muxchannel INTEGER, wexchannel INTEGER, measvalue REAL);
+        CREATE TABLE point (point_id INTEGER PRIMARY KEY, measurementpart_id INTEGER,
+            t REAL, x REAL, y REAL, z REAL, q REAL, statusbyte INTEGER);
+    """)
+    con.execute("INSERT INTO metadata VALUES ('DatabaseVersion', '9')")
+    con.execute("INSERT INTO measurement VALUES (1, NULL, NULL, NULL)")
+    con.execute("INSERT INTO measurementpart VALUES (1, 1, 1, 1, 0, 0, 1, 0.0)")
+    con.execute("INSERT INTO point VALUES (1, 1, 0.2, 0.2, -1e-5, -0.1, 0.0, 0)")
+    con.commit()
+    con.close()
+    with MeasurementReader(path) as reader:
+        assert reader.has_overview() is False
+        with pytest.raises(UnsupportedDatabaseVersionError):
+            reader.read_overview_points()
 
 
 def test_latest_part_id(db_path):
