@@ -292,3 +292,13 @@ def test_decode_status_bits():
     assert decoded["eovl"] is False
     assert decoded["cr"] == 2
     assert decode_status(0)["iovl"] is False
+
+
+def test_reader_dataclasses_are_exported_from_the_package_root():
+    # part_summaries() returns MeasurementPartSummary, so it belongs alongside
+    # its sibling dataclasses at the top level.
+    import pyvium  # pylint: disable=import-outside-toplevel
+
+    for name in ("DataPoint", "ImpedancePoint", "IndexEntry", "MeasurementInfo",
+                 "MeasurementPart", "MeasurementPartSummary"):
+        assert hasattr(pyvium, name), f"pyvium.{name} is not exported"

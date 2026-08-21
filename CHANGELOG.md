@@ -9,8 +9,9 @@ and this project adheres to [PEP 440](https://peps.python.org/pep-0440/) version
 
 Fourth release candidate for 0.3.0. Refreshes the bundled IviumSoft driver DLL to
 release 4.1247, whose main change is that connecting through the DLL no longer kills
-a measurement that is already running on the device. Install it explicitly (pip
-ignores pre-releases by default):
+a measurement that is already running on the device. Also fixes an instance-selection
+leak in the two `set_device_*` setpoint methods. Install it explicitly (pip ignores
+pre-releases by default):
 
 ```
 pip install pyvium==0.3.0rc4
@@ -36,6 +37,19 @@ pip install pyvium==0.3.0rc4
   shortly after. Only the IviumSoft **Connect** button adopted the ongoing measurement.
   The DLL path now matches the button: the run is adopted, data resumes, and the method
   continues to its end.
+- **`set_device_current` / `set_device_potential` no longer leave the selected instance
+  parked on their target.** Both call a fused `IV_selectdevice_*` function, which selects
+  the instance and runs the command in one go but never restores the previous selection,
+  and neither took the driver lock. A setpoint therefore moved the global selection as a
+  side effect: subsequent unscoped calls silently acted on the wrong instance, and a
+  setpoint issued from another thread could redirect a running `Pyvium.on_instance(n)`
+  block, breaking the atomicity that context manager documents. Both methods now hold the
+  lock and restore the previous selection, so they behave as documented and apply a
+  setpoint without changing the caller's selected instance.
+- **`MeasurementPartSummary` is now exported from the package root.** It is the return
+  type of `MeasurementReader.part_summaries()` and was already exported from
+  `pyvium.tools`, but `from pyvium import MeasurementPartSummary` raised `ImportError`
+  while every sibling dataclass imported fine.
 
 ### Compatibility
 

@@ -282,20 +282,50 @@ class DirectModeFunctions():
     @staticmethod
     def set_device_current(instance: int, value: float):
         '''Set current on a selected device instance (galvanostatic mode).
-            instance: IviumSoft instance number; value in Ampere'''
+            instance: IviumSoft instance number; value in Ampere
+
+            IV_selectdevice_setcurrent is select+command fused and leaves the
+            global selection parked on [instance], so this runs under the driver
+            lock and restores the previously selected instance afterwards; the
+            caller's selection is left untouched.
+
+            Note the preconditions are checked against the currently selected
+            instance, not against [instance]; a target instance that is not
+            running surfaces through the result code.'''
         PyviumVerifiers.verify_driver_is_open()
         PyviumVerifiers.verify_iviumsoft_is_running()
-        result_code = Core.IV_selectdevice_setcurrent(instance, value)
-        PyviumVerifiers.verify_result_code(result_code, "set_device_current")
+        with Core.get_lock():
+            previous_instance = Core.get_selected_instance()
+            try:
+                result_code = Core.IV_selectdevice_setcurrent(instance, value)
+                PyviumVerifiers.verify_result_code(
+                    result_code, "set_device_current")
+            finally:
+                Core.IV_selectdevice(previous_instance)
 
     @staticmethod
     def set_device_potential(instance: int, value: float):
         '''Set potential on a selected device instance.
-            instance: IviumSoft instance number; value in Volt'''
+            instance: IviumSoft instance number; value in Volt
+
+            IV_selectdevice_setpotential is select+command fused and leaves the
+            global selection parked on [instance], so this runs under the driver
+            lock and restores the previously selected instance afterwards; the
+            caller's selection is left untouched.
+
+            Note the preconditions are checked against the currently selected
+            instance, not against [instance]; a target instance that is not
+            running surfaces through the result code.'''
         PyviumVerifiers.verify_driver_is_open()
         PyviumVerifiers.verify_iviumsoft_is_running()
-        result_code = Core.IV_selectdevice_setpotential(instance, value)
-        PyviumVerifiers.verify_result_code(result_code, "set_device_potential")
+        with Core.get_lock():
+            previous_instance = Core.get_selected_instance()
+            try:
+                result_code = Core.IV_selectdevice_setpotential(instance, value)
+                PyviumVerifiers.verify_result_code(
+                    result_code, "set_device_potential")
+            finally:
+                Core.IV_selectdevice(previous_instance)
 
     @staticmethod
     def set_ac_amplitude(ac_amplitude: float):
