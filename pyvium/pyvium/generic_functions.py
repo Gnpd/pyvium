@@ -1,3 +1,4 @@
+import time
 import warnings
 from contextlib import contextmanager
 from dataclasses import dataclass
@@ -37,6 +38,36 @@ _NO_SERIAL_STATUS = (-1, 0, 3)
 # out-of-range value (e.g. 999) silently makes IviumSoft open that many tabs. The
 # high-level API guards against that with _verify_channel_number.
 MAX_CHANNELS = 32
+
+
+# IV_connect completes asynchronously: the status goes 0 -> 1 over a short window
+# after the call returns. Anything that needs to know WHICH device landed has to
+# wait for that window and read the serial back. The connect itself comes up
+# sub-second once it starts, so a short poll is enough.
+_CONNECT_SETTLE_TIMEOUT_S = 3.0
+_CONNECT_POLL_INTERVAL_S = 0.2
+
+
+def _await_connected_serial(timeout: float | None = None) -> str:
+    '''Polls the currently selected instance/channel until a device is connected
+        and returns its serial number.
+
+        Returns the connected serial once the status reaches 1/2, or '' if the
+        connection never landed within the timeout (the slot stayed free). The
+        caller must hold the driver lock for the whole poll, otherwise another
+        thread could change the selection and this would read a different
+        channel's device.
+
+        timeout defaults to _CONNECT_SETTLE_TIMEOUT_S, read at call time so the
+        module constant stays adjustable.'''
+    deadline = time.monotonic() + (
+        _CONNECT_SETTLE_TIMEOUT_S if timeout is None else timeout)
+    while True:
+        if Core.IV_getdevicestatus() in (1, 2):
+            return Core.IV_readSN()[1]
+        if time.monotonic() >= deadline:
+            return ''
+        time.sleep(_CONNECT_POLL_INTERVAL_S)
 
 
 def _verify_channel_number(channel_number: int) -> None:
@@ -410,23 +441,50 @@ class GenericFunctions():  # pylint: disable=too-many-public-methods
         return statuses
 
     @staticmethod
-    def connect_device_to_channel(serial_number: str, channel: int) -> None:
-        '''Connects a specific device (by serial number) to a specific channel.
+    def connect_device_to_channel(serial_number: str, channel: int,
+                                  alias: str | None = None) -> None:
+        '''Connects a specific device to a specific Multichannel-control tab.
 
             Selects the channel, disconnects any idle device already on it,
             then selects the requested device and connects it. The whole
             sequence runs under the driver lock so no other thread can change
             the selection mid-way.
 
+            Two identifiers are involved and they are not always the same value
+            (see docs/terminology.md):
+
+              serial_number  the device identity, what IV_readSN reports. This
+                             is what the connection is verified against.
+              alias          the IviumSoft dropdown selection token IV_SelectSn
+                             takes. On a single-channel device it equals the
+                             serial, so it can be omitted. On multichannel
+                             hardware each channel has its own token (e.g.
+                             "Oc-0-3") distinct from its per-channel serial, and
+                             the serial will not select anything. This is the
+                             selection token, not a human display name.
+
+            Resolving a serial to its alias is left to the caller: the mapping
+            comes from the hardware configuration and is not discoverable
+            through the DLL.
+
             Unlike on_channel, this leaves the target channel active on return:
             connecting is a deliberate state change toward that channel, so
             restoring a previous channel would only flip the focused tab away
             (the connection itself persists regardless of the active tab).
 
+            IV_connect is asynchronous and connects the first available device,
+            which IV_SelectSn steers by putting the requested device at the top
+            of the list. A second connect issued before the first has settled can
+            therefore land on the wrong device, so the driver lock is held until
+            the connection has come up and the serial has been read back. A
+            connection that lands on a different device is disconnected again
+            (freeing it) and reported as a failure rather than a false success.
+
             channel must be in 1..MAX_CHANNELS (32), else ValueError.
 
-            Raises DeviceNotConnectedToIviumSoftError if the serial number is
-            not in the available device list.'''
+            Raises DeviceNotConnectedToIviumSoftError if the device is not in
+            the available device list, if the connection does not come up within
+            the settle timeout, or if it lands on a different device.'''
         PyviumVerifiers.verify_driver_is_open()
         PyviumVerifiers.verify_iviumsoft_is_running()
         _verify_channel_number(channel)
@@ -434,5 +492,24 @@ class GenericFunctions():  # pylint: disable=too-many-public-methods
             Core.IV_SelectChannel(channel)
             if Core.IV_getdevicestatus() == 1:  # idle, a device is connected
                 GenericFunctions.disconnect_device()
-            GenericFunctions.select_serial_number(serial_number)
+            GenericFunctions.select_serial_number(alias or serial_number)
             GenericFunctions.connect_device()
+
+            connected_serial = _await_connected_serial()
+            if connected_serial == serial_number:
+                return
+            if not connected_serial:
+                raise DeviceNotConnectedToIviumSoftError(
+                    f"Connecting '{serial_number}' on channel {channel} did not "
+                    f"complete within {_CONNECT_SETTLE_TIMEOUT_S}s; the channel "
+                    "is still free.")
+            # Mis-grab: the connect took a different device than the one that was
+            # selected. Free it so it can be connected through its own channel.
+            disconnect_error = ''
+            try:
+                GenericFunctions.disconnect_device()
+            except Exception as error:  # pylint: disable=broad-except
+                disconnect_error = f"; disconnecting it failed: {error}"
+            raise DeviceNotConnectedToIviumSoftError(
+                f"Connecting '{serial_number}' on channel {channel} grabbed "
+                f"'{connected_serial}' instead{disconnect_error}.")

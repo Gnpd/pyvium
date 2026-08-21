@@ -46,6 +46,26 @@ pip install pyvium==0.3.0rc4
   block, breaking the atomicity that context manager documents. Both methods now hold the
   lock and restore the previous selection, so they behave as documented and apply a
   setpoint without changing the caller's selected instance.
+- **`connect_device_to_channel` now verifies which device it actually connected.**
+  It selected the serial and issued the connect, but never checked the result.
+  `IV_connect` is asynchronous and connects the first available device (which
+  `IV_SelectSn` steers by putting the requested serial at the top of the list), so a
+  connect issued before a previous one had settled could land on a different
+  instrument and still be reported as success, silently attributing a measurement to
+  the wrong device. The driver lock is now held until the connection has come up and
+  the serial has been read back. A connection that lands on a different device is
+  disconnected again and raises `DeviceNotConnectedToIviumSoftError`, as does a
+  connect that never comes up within the settle timeout.
+
+### Added
+
+- **`connect_device_to_channel` takes an optional `alias`**, the IviumSoft dropdown
+  token `IV_SelectSn` selects by. It equals the serial on single-channel devices, but
+  on a multichannel frame each channel has its own token (e.g. `Oc-0-3`) distinct from
+  that channel's serial, so the serial alone selects nothing. `alias` selects and
+  `serial_number` is what the connection is verified against. Resolving one to the
+  other stays with the caller: the mapping comes from the hardware configuration and
+  is not discoverable through the DLL. Omitting it keeps the previous behaviour.
 - **`MeasurementPartSummary` is now exported from the package root.** It is the return
   type of `MeasurementReader.part_summaries()` and was already exported from
   `pyvium.tools`, but `from pyvium import MeasurementPartSummary` raised `ImportError`

@@ -30,7 +30,7 @@ Bundled DLL: IviumSoft **4.1247** (`IV_VersionDllFileStr()` -> `4.1247.10407`, d
 | :heavy_check_mark: get_dll_version_string()             | :heavy_check_mark: IV_VersionDllFileStr()  |
 | :heavy_check_mark: select_channel(int)                  | :heavy_check_mark: IV_SelectChannel(int)   |
 | :heavy_check_mark: get_channel_statuses(int)            |                                            |
-| :heavy_check_mark: connect_device_to_channel(str, int)  |                                            |
+| :heavy_check_mark: connect_device_to_channel(str, int, str)|                                        |
 
 ### Direct Mode
 

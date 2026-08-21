@@ -91,9 +91,37 @@ When you read "channel", check which one is meant:
 The instrument list IviumSoft connects from is sorted **alphabetically by
 serial number**. A bare `connect_device` / `IV_connect` grabs the first
 available instrument in that list (the alphabetically-first serial), not the
-physically-first channel. `select_serial_number` (`IV_SelectSn`) targets a
-specific instrument by serial number and is the robust way to control which
-hardware a connection lands on.
+physically-first channel. `select_serial_number` (`IV_SelectSn`) steers that
+choice by putting a specific instrument at the top of the list, and is the
+robust way to control which hardware a connection lands on.
+
+`IV_connect` is also **asynchronous**: the status goes 0 -> 1 over a short
+window after the call returns. A second connect issued before the first has
+settled can land on a different instrument, so anything that needs to know
+which device it got must wait for the connection to come up and read the serial
+back (`IV_readSN`).
+
+## "Serial" vs "alias": identity is not the selection token
+
+Two different strings identify an instrument, and they coincide only on
+single-channel hardware:
+
+- **Serial** — the device *identity*, what `IV_readSN` /
+  `get_device_serial_number` reports. Everything keys on this: status,
+  ownership, the SQLite measurement files.
+- **Alias** — the *selection token* `IV_SelectSn` takes, i.e. what IviumSoft
+  lists in its device dropdown. On a multichannel frame (n-Stat, OctoStat) each
+  channel has its own token, such as `Oc-0-3`, distinct from that channel's
+  factory serial, and the serial will **not** select anything. On a
+  single-channel device the two are equal.
+
+`connect_device_to_channel(serial_number, channel, alias=...)` keeps them
+apart: `alias` selects, `serial_number` is what the connection is verified
+against. The serial -> alias mapping comes from the hardware configuration and
+is **not** discoverable through the DLL, so resolving it is the caller's job.
+
+"Alias" here is the selection token, never a human display name; keep any
+friendly label as a separate field.
 
 ## Notes for PYVIUM development
 
