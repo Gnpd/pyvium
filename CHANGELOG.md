@@ -5,6 +5,44 @@ All notable changes to PYVIUM are documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [PEP 440](https://peps.python.org/pep-0440/) versioning.
 
+## [0.3.0rc4] - 2026-08-21
+
+Fourth release candidate for 0.3.0. Refreshes the bundled IviumSoft driver DLL to
+release 4.1247, whose main change is that connecting through the DLL no longer kills
+a measurement that is already running on the device. Install it explicitly (pip
+ignores pre-releases by default):
+
+```
+pip install pyvium==0.3.0rc4
+```
+
+### Changed
+
+- **Bundled DLL updated to IviumSoft release 4.1247.** Both binaries were replaced
+  (`IVIUM_remdriver.dll` for 32-bit Python, `Ivium_remdriver64.dll` for 64-bit);
+  `IV_VersionDllFileStr()` now reports `4.1247.10407`. The driver API version is
+  unchanged (`IV_VersionDll()` still returns 203), and the header coverage test
+  confirms every function declared in the bundled header is still bound on `Core`,
+  so no `Core` or `Pyvium` signature changed.
+
+### Fixed
+
+- **Connecting via the DLL now adopts a measurement already running on the device**
+  (driver-side fix in 4.1247; no PYVIUM code change). When a device is left running a
+  method on its own (IviumSoft closed with *Close and continue*, so the run keeps going
+  on the device / DataSecure) and a fresh IviumSoft instance is started, `IV_connect()`
+  (and therefore `Pyvium.connect_device()`) used to flush the buffered points and then
+  terminate the run at about the moment the call returned, leaving the device idle
+  shortly after. Only the IviumSoft **Connect** button adopted the ongoing measurement.
+  The DLL path now matches the button: the run is adopted, data resumes, and the method
+  continues to its end.
+
+### Compatibility
+
+- The minimum supported IviumSoft release is still 4.1242 (the release that introduced
+  the scoped `IV_selectdevice_*` family and fixed the direct-mode trace calls). Adopting
+  a measurement that is already running on the device requires 4.1247.
+
 ## [0.3.0rc3] - 2026-07-20
 
 Third release candidate for 0.3.0. Adds a whole-run overview and tail-scoped task
@@ -100,12 +138,6 @@ pip install pyvium==0.3.0rc1
     `ImpedancePoint`, and `IndexEntry`, plus `UnsupportedDatabaseVersionError`.
 - **Active-instance scan caching** to avoid repeated 32-slot probes; the cache is
   invalidated by `open_driver` / `close_driver` and the instance manager.
-- **Terminology glossary** (`docs/terminology.md`) for *device* vs *instance* vs
-  *channel*.
-- **New/expanded getting-started notebooks** for the 0.3 features: `02` now covers
-  thread-safe instance/channel scoping and multichannel management; new
-  `10_instance_lifecycle_management` (the `IviumsoftInstanceManager`) and
-  `11_sqlite_measurement_readers` (runnable offline against a synthetic DataServer DB).
 - **Public device-status labels.** `DEVICE_STATUS_LABELS` (read-only code -> label
   map) and `device_status_label(code)` are now exported from `pyvium`, so consumers
   no longer need to reach into the private `_STATUS_LABELS`.
@@ -121,8 +153,6 @@ pip install pyvium==0.3.0rc1
 
 - Renamed the device handle to an instance handle (`PyviumInstance`) to match the
   DLL's actual semantics (`IV_selectdevice` selects an instance, not hardware).
-- Documentation: documented the SQLite readers, confirmed driver instance numbering
-  is stable after a close, and corrected the terminology source reference.
 - Bundled DLL updated to IviumSoft release 4.1242 (DLL version 203). This release
   removed `IV_selectdevicesetvalue(int, int, double)`, so `set_device_current` /
   `set_device_potential` now call the dedicated `IV_selectdevice_setcurrent` /
@@ -147,5 +177,7 @@ pip install pyvium==0.3.0rc1
   (and, for many calls, connected hardware). The SQLite readers and IDF/CSV tools
   are the exception: they run without the DLL or hardware.
 
+[0.3.0rc4]: https://github.com/Gnpd/pyvium/releases/tag/v0.3.0rc4
+[0.3.0rc3]: https://github.com/Gnpd/pyvium/releases/tag/v0.3.0rc3
 [0.3.0rc2]: https://github.com/Gnpd/pyvium/releases/tag/v0.3.0rc2
 [0.3.0rc1]: https://github.com/Gnpd/pyvium/releases/tag/v0.3.0rc1

@@ -4,6 +4,9 @@
 :small_orange_diamond: under development
 :x: not working
 
+Bundled DLL: IviumSoft **4.1247** (`IV_VersionDllFileStr()` -> `4.1247.10407`, driver API
+`IV_VersionDll()` -> 203). Minimum supported IviumSoft release is 4.1242.
+
 ### General
 
 | Pyvium Methods                                          | Core Methods                               |
