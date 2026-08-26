@@ -56,6 +56,10 @@ class FakeIviumLib:
         self.on_status_poll = None
 
     def IV_open(self):
+        # The driver resets its selected instance to 1 on open; channel tabs
+        # likewise start at 1.
+        self.selected = 1
+        self.channel = 1
         self.calls.append(('IV_open', self.selected, self.channel))
         return 0
 
@@ -129,6 +133,26 @@ def fake_lib(monkeypatch):
     CoreBase.set_driver_open(False)
     CoreBase.set_selected_instance(1)
     CoreBase.set_selected_channel(1)
+
+
+def test_open_driver_resets_selected_channel_shadow(fake_lib):
+    """A stale channel shadow must not survive a driver reopen.
+
+        IV_SelectChannel treats its argument as a tab count, so restoring a
+        stale channel 3 against a freshly restarted IviumSoft would open three
+        tabs instead of switching to one."""
+    Core.IV_SelectChannel(3)
+    assert Core.get_selected_channel() == 3
+
+    Pyvium.close_driver()
+    Pyvium.open_driver()
+
+    assert Core.get_selected_channel() == 1
+
+    with Pyvium.on_channel(2):
+        assert fake_lib.channel == 2
+
+    assert fake_lib.channel == 1
 
 
 def test_on_channel_selects_then_restores(fake_lib):

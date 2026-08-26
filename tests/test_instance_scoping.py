@@ -36,6 +36,8 @@ class FakeIviumLib:
         self.setter_result_code = 0
 
     def IV_open(self):
+        # The driver resets its selected instance to 1 on open.
+        self.selected = 1
         self.calls.append(('IV_open', self.selected))
         return 0
 
@@ -107,6 +109,43 @@ def test_open_driver_cold_start_skips_iviumsoft_check(cold_lib):
 
     Pyvium.close_driver()
     assert not Core.is_driver_open()
+
+
+def test_close_driver_resets_selected_instance_shadow(fake_lib):
+    Pyvium.select_iviumsoft_instance(3)
+    assert Core.get_selected_instance() == 3
+
+    Pyvium.close_driver()
+
+    assert Core.get_selected_instance() == 1
+
+
+def test_open_driver_resets_selected_instance_shadow(fake_lib):
+    Pyvium.select_iviumsoft_instance(3)
+
+    Pyvium.close_driver()
+    Pyvium.open_driver()
+
+    # The driver is back on instance 1, so the shadow must say 1 too.
+    assert Core.get_selected_instance() == 1
+    assert fake_lib.selected == 1
+
+
+def test_on_instance_after_reopen_restores_to_driver_default(fake_lib):
+    """A stale shadow must not move the working instance after a reopen.
+
+        Before the reset, the shadow still read 3 while the driver was on 1, so
+        this block restored to 3 on exit and silently redirected every later
+        unscoped call to the wrong instance."""
+    Pyvium.select_iviumsoft_instance(3)
+    Pyvium.close_driver()
+    Pyvium.open_driver()
+
+    with Pyvium.on_instance(2):
+        assert fake_lib.selected == 2
+
+    assert fake_lib.selected == 1
+    assert Core.get_selected_instance() == 1
 
 
 def test_on_instance_selects_then_restores(fake_lib):

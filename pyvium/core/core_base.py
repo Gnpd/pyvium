@@ -8,6 +8,11 @@ from ..util import get_ivium_dll_path
 
 ffi = FFI()
 
+# The driver resets its selected instance to 1 on IV_open; channel tabs likewise
+# start at 1. Both selection shadows are initialised and reset to these values.
+DEFAULT_INSTANCE = 1
+DEFAULT_CHANNEL = 1
+
 
 class CoreBase:
     """
@@ -17,14 +22,17 @@ class CoreBase:
     __lib = ffi.dlopen(get_ivium_dll_path())
     # The DLL keeps the selected instance as global state and has no getter,
     # so the last value passed to IV_selectdevice is tracked here. The driver
-    # defaults to instance 1 after IV_open.
-    __selected_instance = 1
+    # defaults to instance 1 after IV_open, so IV_open/IV_close reset this
+    # shadow (see reset_selection_shadows); otherwise a value left over from
+    # before a close would outlive the selection it describes.
+    __selected_instance = DEFAULT_INSTANCE
     # The active multichannel channel is likewise global with no getter, so the
     # last value passed to IV_SelectChannel is tracked here. This is a restore
     # hint, not a source of truth: it reflects what we last selected, not the
     # live IviumSoft UI (a manual tab change is not observable). Channels default
-    # to 1. See get_selected_channel for the caveats.
-    __selected_channel = 1
+    # to 1 and are reset alongside the instance. See get_selected_channel for
+    # the caveats.
+    __selected_channel = DEFAULT_CHANNEL
     # Re-entrant so nested locked sections (high-level methods calling other
     # high-level methods on the same thread) do not deadlock.
     __lock = threading.RLock()
@@ -105,6 +113,19 @@ class CoreBase:
         :param channel_number: Channel number as an integer.
         """
         CoreBase.__selected_channel = channel_number
+
+    @staticmethod
+    def reset_selection_shadows() -> None:
+        """
+        Resets both selection shadows to the values the driver starts from.
+
+        Called by IV_open/IV_close: the DLL resets its selected instance to 1
+        on IV_open, so a shadow surviving from before the close would make the
+        next scoped block restore a selection the driver no longer has, moving
+        the caller's working instance without any command saying so.
+        """
+        CoreBase.__selected_instance = DEFAULT_INSTANCE
+        CoreBase.__selected_channel = DEFAULT_CHANNEL
 
     @staticmethod
     def get_lib() -> Any:

@@ -29,6 +29,7 @@ class GenericFunctions(CoreBase):
         """Open the driver to manipulate the Ivium software"""
         result = CoreBase.get_lib().IV_open()
         CoreBase.set_driver_open(True)
+        CoreBase.reset_selection_shadows()
         return result
 
     @staticmethod
@@ -36,6 +37,7 @@ class GenericFunctions(CoreBase):
         """Closes the iviumSoft driver"""
         result = CoreBase.get_lib().IV_close()
         CoreBase.set_driver_open(False)
+        CoreBase.reset_selection_shadows()
         return result
 
     @staticmethod

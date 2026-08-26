@@ -104,7 +104,11 @@ class GenericFunctions():  # pylint: disable=too-many-public-methods
             verify_iviumsoft=False skips the check that an IviumSoft instance
             is running, allowing a cold start where instances are launched
             afterwards (e.g. via IviumsoftInstanceManager). Every subsequent
-            command still verifies IviumSoft on its own.'''
+            command still verifies IviumSoft on its own.
+
+            The driver starts on instance 1, so opening it resets the selected
+            instance and channel to 1: a selection made before a close does not
+            carry over into the reopened driver.'''
         if Core.is_driver_open():
             warnings.warn(
                 "open_driver() called but driver is already open, closing and reopening",
@@ -124,8 +128,13 @@ class GenericFunctions():  # pylint: disable=too-many-public-methods
 
     @staticmethod
     def close_driver():
-        '''Closes the iviumSoft driver'''
+        '''Closes the iviumSoft driver.
+
+            Also resets the selected instance and channel to 1, so a stale
+            selection cannot outlive the driver that held it.'''
         if not Core.is_driver_open():
+            # Nothing to close, and nothing to reset: whatever closed the
+            # driver already reset the selection.
             return
         Core.IV_close()
         Core.invalidate_active_instances_cache()
