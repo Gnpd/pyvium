@@ -5,6 +5,26 @@ All notable changes to PYVIUM are documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [PEP 440](https://peps.python.org/pep-0440/) versioning.
 
+## [Unreleased]
+
+### Fixed
+
+- **A driver close/reopen no longer leaves a stale instance or channel selection.**
+  `Core` shadows the driver's selected instance and channel, because the DLL keeps both
+  as global state with no getter, and every scoping helper (`on_instance`, `on_channel`,
+  `get_active_iviumsoft_instances`, `get_channel_statuses`, `set_device_current` /
+  `set_device_potential`) reads the shadow to know what to restore afterwards. The
+  shadows were never reset when the driver was closed and reopened, although the driver
+  itself starts again on instance 1. After `select_iviumsoft_instance(3)` followed by
+  `close_driver()` and `open_driver()`, the driver was on instance 1 while the shadow
+  still said 3, so the first `with Pyvium.on_instance(n):` block restored to 3 on exit
+  and silently moved the working instance: every later unscoped call went to the wrong
+  IviumSoft instance and still reported success. `IV_open` and `IV_close` now reset both
+  shadows to 1, matching the state the driver starts from. The stale channel case had a
+  second edge, since `IV_SelectChannel` treats its argument as a tab count: restoring a
+  stale channel 3 against a freshly restarted IviumSoft opened three tabs rather than
+  switching to one.
+
 ## [0.3.0rc4] - 2026-08-21
 
 Fourth release candidate for 0.3.0. Refreshes the bundled IviumSoft driver DLL to
