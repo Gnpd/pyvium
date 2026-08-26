@@ -40,6 +40,29 @@ and this project adheres to [PEP 440](https://peps.python.org/pep-0440/) version
   running at all the previous selection stands. A scan that fails partway still restores
   blindly, since its partial list says nothing about the instances it never reached.
 
+- **The instance manager no longer risks closing or terminating an unrelated process.**
+  `IviumsoftInstanceManager` identified a process by bare pid. Instances it launched were
+  safe, because the `Popen` handle it holds stops Windows reusing their pid, but an adopted
+  instance had nothing pinning it: `close()` posted `WM_CLOSE` and then, up to
+  `close_timeout` seconds later, called `TerminateProcess`, with no recheck of what the pid
+  referred to in between. If the adopted IviumSoft had exited and Windows had recycled its
+  pid, both landed on whatever now held it. `close_orphans()` had the same gap. Every close
+  and terminate path now verifies two things first: that the pid is still an IviumSoft
+  process at the manager's `exe_path`, and that its OS start time still matches the one
+  recorded, which is what distinguishes one IviumSoft from another after a pid reuse. A
+  mismatch warns and drops the record instead of touching the process.
+- **`ManagedInstance` gained `started_at`**, the OS process start time used as that identity
+  pin (distinct from `launched_at`, which is the manager's own clock and is set only for
+  launches), and **`adopt()` now rejects a pid that is not an IviumSoft process at the
+  manager's `exe_path`** with `ValueError`, so a record cannot be created that a later
+  `close()` would refuse to act on.
+- **`windows_process.is_process_running` no longer misreads two cases.** It compared
+  `GetExitCodeProcess` against `STILL_ACTIVE` (259), so a process that exited with code 259
+  of its own read as still running; liveness now comes from waiting on the process handle
+  with a zero timeout. It also returned `False` for any `OpenProcess` failure, so a live
+  process the caller merely lacked rights to open read as gone and `list_instances()` pruned
+  its record; an access denial is now told apart from a genuine absence.
+
 ## [0.3.0rc4] - 2026-08-21
 
 Fourth release candidate for 0.3.0. Refreshes the bundled IviumSoft driver DLL to

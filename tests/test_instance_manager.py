@@ -4,6 +4,7 @@ The DLL is replaced by the in-memory fake from test_instance_scoping, and the
 OS layer (process spawn, window close, process queries) by a FakeWorld, so the
 full lifecycle state machine runs without IviumSoft or hardware.'''
 import threading
+import warnings
 from datetime import datetime
 
 import pytest
@@ -63,6 +64,8 @@ class FakeWorld:
         self.close_requests = []
         self.terminated_pids = []
         self.creation_times = {}         # pid -> datetime
+        self.image_paths = {}            # pid -> exe path, when not the default
+        self.default_image_path = 'fake-iviumsoft.exe'
         self.window_titles = {}          # pid -> str
         self.external_instances = {}     # external pid -> instance number
         self.register_on_launch = True   # instance registers instantly
@@ -89,10 +92,15 @@ class FakeWorld:
         self.lib.active_instances.add(process.instance_number)
 
     def spawn_external(self, pid, instance_number=None, title=None,
-                       started_at=None):
-        '''An IviumSoft process this manager never launched (an orphan).'''
+                       started_at=None, image_path=None):
+        '''An IviumSoft process this manager never launched (an orphan).
+
+            image_path stands in for a pid Windows recycled for some other
+            program: anything but the manager's exe must never be touched.'''
         self.alive_pids.add(pid)
         self.creation_times[pid] = started_at or datetime.now()
+        if image_path is not None:
+            self.image_paths[pid] = image_path
         if title is not None:
             self.window_titles[pid] = title
         if instance_number is not None:
@@ -136,6 +144,11 @@ class FakeWorld:
     def get_main_window_title(self, pid):
         return self.window_titles.get(pid)
 
+    def get_process_image_path(self, pid):
+        if pid in self.image_paths:
+            return self.image_paths[pid]
+        return self.default_image_path if pid in self.alive_pids else None
+
 
 @pytest.fixture
 def world(monkeypatch):
@@ -161,6 +174,8 @@ def world(monkeypatch):
                         fake_world.get_process_creation_time)
     monkeypatch.setattr(windows_process, 'get_main_window_title',
                         fake_world.get_main_window_title)
+    monkeypatch.setattr(windows_process, 'get_process_image_path',
+                        fake_world.get_process_image_path)
 
     yield fake_world
 
@@ -290,6 +305,124 @@ def test_adopt_validates_instance_and_pid(world):
 
     with pytest.raises(ValueError, match='not running'):
         manager.adopt(1, 4242)  # instance exists, pid does not
+
+
+def test_close_refuses_a_pid_recycled_by_another_program(world):
+    """A pid Windows handed to another program must never be closed or killed."""
+    world.lib.active_instances.add(5)
+    world.spawn_external(7777, started_at=datetime(2026, 1, 1, 10, 0))
+    manager = make_manager()
+    manager.adopt(5, 7777)
+
+    # The IviumSoft process dies and Windows recycles its pid for an editor.
+    world.exit_pid(7777, exit_code=0)
+    world.lib.active_instances.add(5)
+    world.spawn_external(7777, started_at=datetime(2026, 1, 1, 11, 0),
+                         image_path='C:/Windows/notepad.exe')
+
+    with warnings.catch_warnings(record=True) as caught:
+        warnings.simplefilter('always')
+        manager.close(5)
+
+    assert world.close_requests == []
+    assert world.terminated_pids == []
+    assert 7777 in world.alive_pids  # the editor is untouched
+    assert any('no longer' in str(warning.message) for warning in caught)
+    assert 5 not in {item.instance_number for item in manager.list_instances()
+                     if item.pid is not None}
+
+
+def test_close_refuses_a_pid_recycled_by_another_iviumsoft(world):
+    """The case an exe-path check alone cannot catch: same program, same pid.
+
+        The manager launches and closes IviumSoft repeatedly, so a recycled pid
+        is far more likely to be another IviumSoft than an unrelated program."""
+    world.lib.active_instances.add(5)
+    world.spawn_external(7777, started_at=datetime(2026, 1, 1, 10, 0))
+    manager = make_manager()
+    manager.adopt(5, 7777)
+
+    world.exit_pid(7777, exit_code=0)
+    world.lib.active_instances.add(5)
+    world.spawn_external(7777, started_at=datetime(2026, 1, 1, 11, 0))
+
+    with warnings.catch_warnings(record=True) as caught:
+        warnings.simplefilter('always')
+        manager.close(5)
+
+    assert world.close_requests == []
+    assert world.terminated_pids == []
+    assert 7777 in world.alive_pids
+    assert any('no longer' in str(warning.message) for warning in caught)
+
+
+def test_close_terminates_when_the_pid_is_still_ours(world):
+    """The guard must not refuse the ordinary escalation path."""
+    world.lib.active_instances.add(5)
+    world.spawn_external(7777, started_at=datetime(2026, 1, 1, 10, 0))
+    world.honour_close = False
+    manager = make_manager()
+    manager.adopt(5, 7777)
+
+    with pytest.warns(UserWarning, match='did not close'):
+        manager.close(5)
+
+    assert world.close_requests == [7777]
+    assert world.terminated_pids == [7777]
+
+
+def test_close_orphans_skips_a_recycled_pid(world):
+    world.spawn_external(8001, instance_number=6)
+    world.spawn_external(8002, instance_number=7,
+                         image_path='C:/Windows/notepad.exe')
+    manager = make_manager()
+
+    manager.close_orphans()
+
+    assert world.close_requests == [8001]
+    assert 8002 in world.alive_pids
+
+
+def test_adopt_rejects_a_pid_that_is_not_iviumsoft(world):
+    world.lib.active_instances.add(5)
+    world.spawn_external(7777, image_path='C:/Windows/notepad.exe')
+    manager = make_manager()
+
+    with pytest.raises(ValueError, match='not .*IviumSoft|image path'):
+        manager.adopt(5, 7777)
+
+
+def test_adopt_accepts_a_manually_launched_instance(world):
+    """The ordinary orphan-recovery flow: discover, pair by hand, adopt, close."""
+    world.spawn_external(7777, instance_number=5, title='IviumSoft - manual')
+    manager = make_manager()
+
+    report = manager.discover()
+    assert 5 in report.orphan_instance_numbers  # instance 1 is an orphan too
+    assert 7777 in [process.pid for process in report.untracked_processes]
+
+    record = manager.adopt(5, 7777)
+    assert record.managed is False
+    assert record.started_at == world.creation_times[7777]
+
+    manager.close(5)
+    assert world.close_requests == [7777]
+
+
+def test_list_instances_prunes_a_record_whose_process_was_replaced(world):
+    world.lib.active_instances.add(5)
+    world.spawn_external(7777, started_at=datetime(2026, 1, 1, 10, 0))
+    manager = make_manager()
+    manager.adopt(5, 7777)
+
+    world.exit_pid(7777, exit_code=0)
+    world.lib.active_instances.add(5)
+    world.spawn_external(7777, started_at=datetime(2026, 1, 1, 11, 0))
+
+    listed = {item.instance_number: item for item in manager.list_instances()}
+
+    # Instance 5 is still active, but our record no longer points at its process.
+    assert listed[5].pid is None
 
 
 def test_list_instances_merges_managed_and_orphans(world):

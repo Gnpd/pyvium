@@ -130,7 +130,7 @@ cold-start `open_driver(verify_iviumsoft=False)`.
 | :heavy_check_mark: `IviumsoftInstanceManager(exe_path=..., ...)` | Manager over IviumSoft processes |
 | :heavy_check_mark: `.launch()` -> `ManagedInstance` | Start one IviumSoft process and map it to the new driver instance number |
 | :heavy_check_mark: `.close(instance_number, force=False)` | Gracefully close an instance (refuses a measuring one unless `force`) |
-| :heavy_check_mark: `.adopt(instance_number, pid)` | Re-attach to an instance launched outside the manager |
+| :heavy_check_mark: `.adopt(instance_number, pid)` | Re-attach to an instance launched outside the manager (the pid must be an IviumSoft process at the manager's `exe_path`) |
 | :heavy_check_mark: `.discover()` -> `DiscoveryReport` | Read-only: pair tracked instances, orphan instance numbers and untracked processes |
 | :heavy_check_mark: `.close_orphans(force=False)` | Close every untracked IviumSoft process the manager does not track |
 | :heavy_check_mark: `.list_instances()` -> `list[ManagedInstance]` | One record per active instance (managed carry a pid; orphans have `pid=None`) |

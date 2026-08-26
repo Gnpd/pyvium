@@ -46,6 +46,10 @@ class ManagedInstance:
     launched_at: datetime | None
     managed: bool
     process: subprocess.Popen | None = field(default=None, repr=False)
+    # OS process start time, read at launch/adopt. Windows reuses pids, so this
+    # is what tells our process apart from a later one wearing the same pid;
+    # launched_at is this manager's own clock and is set only for launches.
+    started_at: datetime | None = None
 
 
 @dataclass
@@ -124,6 +128,8 @@ class IviumsoftInstanceManager:
                         launched_at=datetime.now(),
                         managed=True,
                         process=process,
+                        started_at=windows_process.get_process_creation_time(
+                            process.pid),
                     )
                     self._records[instance_number] = record
                     Core.invalidate_active_instances_cache()
@@ -150,6 +156,18 @@ class IviumsoftInstanceManager:
                     f"Instance {instance_number} has no known pid in this "
                     "manager. Launch it here or adopt(instance_number, pid) "
                     "before closing.")
+
+            if not self._is_our_process(record.pid, record.started_at):
+                warnings.warn(
+                    f"Instance {instance_number} (pid {record.pid}) is no longer "
+                    "the process this manager recorded: it exited and the pid "
+                    "was reused. Dropping the record without closing anything.",
+                    UserWarning,
+                    stacklevel=2,
+                )
+                self._records.pop(instance_number, None)
+                Core.invalidate_active_instances_cache()
+                return
 
             if not force:
                 self._verify_not_busy(instance_number)
@@ -188,11 +206,22 @@ class IviumsoftInstanceManager:
             if not windows_process.is_process_running(pid):
                 raise ValueError(f"Process {pid} is not running")
 
+            image_path = windows_process.get_process_image_path(pid)
+            if image_path is None or not windows_process.same_image_path(
+                    image_path, self._exe_path):
+                raise ValueError(
+                    f"Process {pid} is not this manager's IviumSoft: its image "
+                    f"path is {image_path!r}, expected {self._exe_path!r}. "
+                    "Adopting it would let close() message and terminate a "
+                    "process that is not IviumSoft; construct the manager with "
+                    "exe_path set to that install to manage it.")
+
             record = ManagedInstance(
                 instance_number=instance_number,
                 pid=pid,
                 launched_at=None,
                 managed=False,
+                started_at=windows_process.get_process_creation_time(pid),
             )
             self._records[instance_number] = record
             return record
@@ -259,29 +288,39 @@ class IviumsoftInstanceManager:
                             "individually, or use close_orphans(force=True) "
                             "to override.")
 
-            pending = [process.pid for process in report.untracked_processes]
-            for pid in pending:
-                windows_process.close_main_windows(pid)
+            # The whole sweep works from UntrackedProcess records rather than
+            # bare pids: discover() already read each start time, and the loop
+            # below can take close_timeout seconds, which is ample for a pid to
+            # be recycled underneath it.
+            pending = [process for process in report.untracked_processes
+                       if self._is_our_process(process.pid, process.started_at)]
+            closed_pids = [process.pid for process in pending]
+            for process in pending:
+                windows_process.close_main_windows(process.pid)
 
             deadline = time.monotonic() + self._close_timeout
             while pending:
-                pending = [pid for pid in pending
-                           if windows_process.is_process_running(pid)]
+                pending = [
+                    process for process in pending
+                    if windows_process.is_process_running(process.pid)
+                    and self._is_our_process(process.pid, process.started_at)]
                 if not pending or time.monotonic() >= deadline:
                     break
                 time.sleep(self._poll_interval)
 
-            for pid in pending:
+            for process in pending:
                 warnings.warn(
-                    f"Orphan IviumSoft process (pid {pid}) did not close "
-                    f"within {self._close_timeout}s, terminating the process",
+                    f"Orphan IviumSoft process (pid {process.pid}) did not "
+                    f"close within {self._close_timeout}s, terminating the "
+                    "process",
                     UserWarning,
                     stacklevel=2,
                 )
-                windows_process.terminate_process(pid)
+                if self._is_our_process(process.pid, process.started_at):
+                    windows_process.terminate_process(process.pid)
 
             Core.invalidate_active_instances_cache()
-            return [process.pid for process in report.untracked_processes]
+            return closed_pids
 
     def list_instances(self) -> list[ManagedInstance]:
         '''Returns one record per active driver instance: launched and
@@ -315,15 +354,36 @@ class IviumsoftInstanceManager:
                 f"Instance {instance_number} is measuring, aborting the "
                 "method first, or use close(force=True) to override")
 
-    @staticmethod
-    def _is_running(record: ManagedInstance) -> bool:
-        if record.process is not None:
-            return record.process.poll() is None
-        return windows_process.is_process_running(record.pid)
+    def _is_our_process(self, pid: int | None,
+                        started_at: datetime | None) -> bool:
+        '''True when pid is still the IviumSoft process the manager recorded.
 
-    @staticmethod
-    def _terminate(record: ManagedInstance) -> None:
+            Two independent checks, because they catch different substitutions.
+            The image path must still be this manager's exe, so a pid Windows
+            handed to an unrelated program is never messaged or killed. The
+            start time must match the one recorded, which is the only thing that
+            tells one IviumSoft from another after a pid reuse. A start time
+            that could not be read falls back to the exe check alone.'''
+        if pid is None:
+            return False
+        image_path = windows_process.get_process_image_path(pid)
+        if image_path is None or not windows_process.same_image_path(
+                image_path, self._exe_path):
+            return False
+        if started_at is None:
+            return True
+        return windows_process.get_process_creation_time(pid) == started_at
+
+    def _is_running(self, record: ManagedInstance) -> bool:
+        if record.process is not None:
+            # A held Popen handle stops Windows reusing the pid, so the poll
+            # alone is conclusive for instances this manager launched.
+            return record.process.poll() is None
+        return (windows_process.is_process_running(record.pid)
+                and self._is_our_process(record.pid, record.started_at))
+
+    def _terminate(self, record: ManagedInstance) -> None:
         if record.process is not None:
             record.process.kill()
-        else:
+        elif self._is_our_process(record.pid, record.started_at):
             windows_process.terminate_process(record.pid)

@@ -11,7 +11,9 @@ from datetime import datetime
 WM_CLOSE = 0x0010
 PROCESS_TERMINATE = 0x0001
 PROCESS_QUERY_LIMITED_INFORMATION = 0x1000
-STILL_ACTIVE = 259
+SYNCHRONIZE = 0x00100000
+WAIT_TIMEOUT = 0x102
+ERROR_ACCESS_DENIED = 5
 TH32CS_SNAPPROCESS = 0x00000002
 
 # Seconds between the Windows FILETIME epoch (1601) and the Unix epoch (1970).
@@ -58,16 +60,21 @@ def close_main_windows(pid: int) -> int:
 
 
 def is_process_running(pid: int) -> bool:
-    '''Returns True if the process exists and has not exited.'''
-    kernel32 = ctypes.windll.kernel32
+    '''Returns True if the process exists and has not exited.
+
+        Liveness comes from waiting on the process handle with a zero timeout
+        rather than from GetExitCodeProcess: that call reports STILL_ACTIVE
+        (259) for a running process, which a process exiting with code 259 of
+        its own is indistinguishable from.'''
+    kernel32 = ctypes.WinDLL('kernel32', use_last_error=True)
     process_handle = kernel32.OpenProcess(
-        PROCESS_QUERY_LIMITED_INFORMATION, False, pid)
+        SYNCHRONIZE | PROCESS_QUERY_LIMITED_INFORMATION, False, pid)
     if not process_handle:
-        return False
+        # Denied means the process is there but this caller cannot query it;
+        # any other failure means it is genuinely gone.
+        return ctypes.get_last_error() == ERROR_ACCESS_DENIED
     try:
-        exit_code = wintypes.DWORD()
-        kernel32.GetExitCodeProcess(process_handle, ctypes.byref(exit_code))
-        return exit_code.value == STILL_ACTIVE
+        return kernel32.WaitForSingleObject(process_handle, 0) == WAIT_TIMEOUT
     finally:
         kernel32.CloseHandle(process_handle)
 
@@ -81,7 +88,6 @@ def find_pids_by_exe(exe_path: str) -> list[int]:
         one whose path cannot be read is kept on the name match alone.'''
     kernel32 = ctypes.windll.kernel32
     exe_name = ntpath.basename(exe_path).lower()
-    normalized_path = ntpath.normpath(exe_path).lower()
 
     snapshot = kernel32.CreateToolhelp32Snapshot(TH32CS_SNAPPROCESS, 0)
     if snapshot in (0, -1):
@@ -94,8 +100,8 @@ def find_pids_by_exe(exe_path: str) -> list[int]:
         has_entry = kernel32.Process32FirstW(snapshot, ctypes.byref(entry))
         while has_entry:
             if entry.szExeFile.lower() == exe_name:
-                image_path = _get_process_image_path(entry.th32ProcessID)
-                if image_path is None or ntpath.normpath(image_path).lower() == normalized_path:
+                image_path = get_process_image_path(entry.th32ProcessID)
+                if image_path is None or same_image_path(image_path, exe_path):
                     pids.append(entry.th32ProcessID)
             has_entry = kernel32.Process32NextW(snapshot, ctypes.byref(entry))
     finally:
@@ -149,7 +155,15 @@ def get_main_window_title(pid: int) -> str | None:
     return title_found
 
 
-def _get_process_image_path(pid: int) -> str | None:
+def same_image_path(image_path: str, exe_path: str) -> bool:
+    '''True when two executable paths name the same file, comparing them
+        case-insensitively and with separators normalised.'''
+    return ntpath.normpath(image_path).lower() == ntpath.normpath(exe_path).lower()
+
+
+def get_process_image_path(pid: int) -> str | None:
+    '''Returns the full image path of the process, or None if it is gone or
+        the path cannot be read.'''
     kernel32 = ctypes.windll.kernel32
     process_handle = kernel32.OpenProcess(
         PROCESS_QUERY_LIMITED_INFORMATION, False, pid)
