@@ -34,6 +34,8 @@ class FakeIviumLib:
         self.call_delay = 0.0
         # Result code the fused IV_selectdevice_* setters return (0 = success).
         self.setter_result_code = 0
+        # Instance whose status probe blows up, to cut a scan short partway.
+        self.raise_on_instance = None
 
     def IV_open(self):
         # The driver resets its selected instance to 1 on open.
@@ -52,6 +54,8 @@ class FakeIviumLib:
     def IV_getdevicestatus(self):
         if self.call_delay:
             time.sleep(self.call_delay)
+        if self.selected == self.raise_on_instance:
+            raise RuntimeError(f'status probe failed on instance {self.selected}')
         self.calls.append(('IV_getdevicestatus', self.selected))
         return 1 if self.selected in self.active_instances else -1
 
@@ -207,6 +211,51 @@ def test_get_active_instances_restores_previous_selection(fake_lib):
 
     assert active == [1, 2, 3]
     assert fake_lib.selected == 2
+
+
+def test_scan_relocates_when_previous_instance_is_gone(fake_lib):
+    """A scan must not report which instances are alive and then park on a dead one.
+
+        Instance numbering does not compact when an instance closes, so a shadow
+        pointing at a closed slot while others run is an ordinary state."""
+    fake_lib.active_instances.remove(1)  # closed from its own window
+    assert Core.get_selected_instance() == 1
+
+    active = Pyvium.get_active_iviumsoft_instances()
+
+    assert active == [2, 3]
+    assert fake_lib.selected == 2
+    assert Core.get_selected_instance() == 2
+
+
+def test_scan_leaves_selection_alone_when_nothing_is_active(cold_lib):
+    """With nothing running there is no better target, so do not touch it.
+
+        The instance manager scans before launching, so relocating here would
+        clobber a selection made for the instance that is about to appear."""
+    Pyvium.open_driver(verify_iviumsoft=False)
+    Core.IV_selectdevice(2)
+
+    active = Pyvium.get_active_iviumsoft_instances()
+
+    assert active == []
+    assert cold_lib.selected == 2
+    assert Core.get_selected_instance() == 2
+
+
+def test_scan_restores_previous_selection_when_it_fails_midway(fake_lib):
+    """A partial scan says nothing about instances it never reached.
+
+        Here the scan dies on instance 2, so the list holds only [1]; instance 3
+        is alive but unvisited and must not be mistaken for gone."""
+    Core.IV_selectdevice(3)
+    fake_lib.raise_on_instance = 2
+
+    with pytest.raises(RuntimeError):
+        Pyvium.get_active_iviumsoft_instances()
+
+    assert fake_lib.selected == 3
+    assert Core.get_selected_instance() == 3
 
 
 def test_get_active_populates_cache_and_use_cache_skips_dll(fake_lib):

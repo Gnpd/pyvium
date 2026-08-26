@@ -83,6 +83,20 @@ def _verify_channel_number(channel_number: int) -> None:
             "many tabs")
 
 
+def _scan_restore_target(previous_instance: int, active_instances: list) -> int:
+    '''Returns the instance a completed scan should leave selected.
+
+        The previous selection when it is still running, so a scan has no side
+        effect. When that instance has gone and another is running, the lowest
+        active one instead: reporting which instances are alive and then parking
+        the caller on a dead one makes the next command fail for no reason. When
+        nothing at all is running there is no better target, so the previous
+        selection stands.'''
+    if previous_instance in active_instances or not active_instances:
+        return previous_instance
+    return active_instances[0]
+
+
 @dataclass
 class ChannelStatus:
     '''One multichannel channel as seen during a get_channel_statuses scan.
@@ -174,6 +188,13 @@ class GenericFunctions():  # pylint: disable=too-many-public-methods
             runs, so it holds the driver lock and restores the previous selection
             afterwards. The slot count is fixed at 32.
 
+            One exception to that restore: if the previously selected instance is
+            no longer running and another one is, the scan leaves the selection on
+            the lowest-numbered running instance instead. Reporting which
+            instances are alive and then parking the caller on a dead one would
+            make the next command raise IviumSoftNotRunningError for no reason.
+            With nothing running at all the previous selection stands.
+
             use_cache=True returns the list from the last full scan without
             touching the DLL, when one is available. The cache is kept fresh by
             open_driver/close_driver and the instance manager, but it cannot see
@@ -187,6 +208,7 @@ class GenericFunctions():  # pylint: disable=too-many-public-methods
             if cached is not None:
                 return list(cached)
         active_instances = []
+        scan_completed = False
         with Core.get_lock():
             previous_instance = Core.get_selected_instance()
             try:
@@ -195,8 +217,14 @@ class GenericFunctions():  # pylint: disable=too-many-public-methods
 
                     if Core.IV_getdevicestatus() != -1:
                         active_instances.append(instance_number)
+                scan_completed = True
             finally:
-                Core.IV_selectdevice(previous_instance)
+                # A scan that died partway holds a partial list, which says
+                # nothing about the instances it never reached, so restore
+                # blindly in that case.
+                Core.IV_selectdevice(
+                    _scan_restore_target(previous_instance, active_instances)
+                    if scan_completed else previous_instance)
         Core.set_active_instances_cache(active_instances)
         return active_instances
 

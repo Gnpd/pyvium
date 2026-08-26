@@ -25,6 +25,21 @@ and this project adheres to [PEP 440](https://peps.python.org/pep-0440/) version
   stale channel 3 against a freshly restarted IviumSoft opened three tabs rather than
   switching to one.
 
+- **The active-instance scan no longer parks the selection on an instance that has gone.**
+  Up to 0.2.x, `get_active_iviumsoft_instances()` ended by selecting the first active
+  instance, so calling it doubled as a recovery step. 0.3.0rc1 changed it to restore the
+  caller's previous selection instead, so the scan would have no side effects; that change
+  was never listed here. The restore target came from the tracked selection with no check
+  that it was still running, so with instance 1 closed and 2 and 3 live, a scan returned
+  `[2, 3]` and then left the selection on the dead instance 1, making the next
+  `connect_device()` raise `IviumSoftNotRunningError`. Instance numbers do not compact when
+  an instance closes, so that state is ordinary rather than exotic, and
+  `IviumsoftInstanceManager.close()` produces it directly by leaving the selection on the
+  instance it just killed. The scan now restores the previous selection whenever it is still
+  running, and otherwise falls back to the lowest-numbered running instance; with nothing
+  running at all the previous selection stands. A scan that fails partway still restores
+  blindly, since its partial list says nothing about the instances it never reached.
+
 ## [0.3.0rc4] - 2026-08-21
 
 Fourth release candidate for 0.3.0. Refreshes the bundled IviumSoft driver DLL to
