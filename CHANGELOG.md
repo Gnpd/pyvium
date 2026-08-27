@@ -63,6 +63,26 @@ and this project adheres to [PEP 440](https://peps.python.org/pep-0440/) version
   process the caller merely lacked rights to open read as gone and `list_instances()` pruned
   its record; an access denial is now told apart from a genuine absence.
 
+- **The instance manager can now clean up an IviumSoft that already left the driver.**
+  `close()` checked for a running measurement through
+  `Pyvium.instance(n).get_device_status()`, which raises `IviumSoftNotRunningError` when the
+  driver no longer knows the instance. An instance that had deregistered but whose process was
+  still alive (closed from its own window and winding down, crashed, or hung) therefore made
+  `close()` raise an exception its own contract did not name, and the record, the process and
+  the stale cache were all left behind. That is precisely the case where cleanup is needed. The
+  busy check now distinguishes "not measuring" from "cannot be asked": a deregistered instance
+  is reported with a warning and its leftover process is closed, since the instance has already
+  left the driver and closing what remains cannot affect a run. Closing an instance does not
+  stop a measurement on the device in any case; on DataSecure hardware the run continues
+  without an instance and a later connection reloads it and carries the method on.
+- **`list_instances()` no longer forgets a process that is still running.** It pruned any
+  record whose instance was not in the active list, even when the process was alive, so a
+  single `list_instances()` call dropped the pid of a hung instance and the following
+  `close()` failed with `ValueError: no known pid`. Pruning now depends on the process alone.
+  Such a record stays out of the returned list, which is still one entry per active instance,
+  and `discover()` now reports its process under `untracked_processes` as well, so it is
+  visible and `close_orphans()` can sweep it.
+
 ## [0.3.0rc4] - 2026-08-21
 
 Fourth release candidate for 0.3.0. Refreshes the bundled IviumSoft driver DLL to

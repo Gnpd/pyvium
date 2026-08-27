@@ -425,6 +425,77 @@ def test_list_instances_prunes_a_record_whose_process_was_replaced(world):
     assert listed[5].pid is None
 
 
+def _deregister(world, instance_number):
+    """IviumSoft leaves the driver but its process lives on.
+
+        Distinct from world.exit_pid, which does both: this is the window where
+        the driver answers -1 while the process is still winding down, crashed
+        without exiting, or hung."""
+    world.lib.active_instances.discard(instance_number)
+
+
+def test_close_closes_a_deregistered_instance_whose_process_lives(world):
+    """The busy check cannot run, but the process still needs cleaning up."""
+    manager = make_manager()
+    record = manager.launch()
+    _deregister(world, record.instance_number)
+
+    with warnings.catch_warnings(record=True) as caught:
+        warnings.simplefilter('always')
+        manager.close(record.instance_number)
+
+    assert world.close_requests == [record.pid]
+    assert record.pid not in world.alive_pids
+    assert any('deregistered' in str(warning.message) for warning in caught)
+
+
+def test_close_terminates_a_hung_deregistered_instance(world):
+    """The case the fix exists for: deregistered, alive, and ignoring WM_CLOSE."""
+    world.honour_close = False
+    manager = make_manager()
+    record = manager.launch()
+    _deregister(world, record.instance_number)
+
+    with warnings.catch_warnings(record=True) as caught:
+        warnings.simplefilter('always')
+        manager.close(record.instance_number)
+
+    assert world.close_requests == [record.pid]
+    assert world.launched[0].returncode == -9  # killed via the Popen handle
+    assert any('did not close' in str(warning.message) for warning in caught)
+
+
+def test_list_instances_keeps_a_deregistered_record_whose_process_lives(world):
+    """Pruning on the registration rather than the process stranded the pid."""
+    manager = make_manager()
+    record = manager.launch()
+    _deregister(world, record.instance_number)
+
+    listed = manager.list_instances()
+    assert record.instance_number not in [item.instance_number for item in listed]
+
+    # The record survives, so the leftover process is still closable.
+    with warnings.catch_warnings(record=True):
+        warnings.simplefilter('always')
+        manager.close(record.instance_number)
+
+    assert world.close_requests == [record.pid]
+
+
+def test_discover_reports_a_deregistered_process_as_untracked(world):
+    manager = make_manager()
+    record = manager.launch()
+    _deregister(world, record.instance_number)
+
+    report = manager.discover()
+
+    # Reported on both sides on purpose: the manager still holds the record,
+    # and the OS shows a process no active instance claims. That mismatch is
+    # the signal, and it makes the process sweepable by close_orphans().
+    assert record.instance_number in [item.instance_number for item in report.tracked]
+    assert record.pid in [process.pid for process in report.untracked_processes]
+
+
 def test_list_instances_merges_managed_and_orphans(world):
     manager = make_manager()
     record = manager.launch()        # instance 2, managed

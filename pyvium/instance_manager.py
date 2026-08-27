@@ -13,7 +13,7 @@ from dataclasses import dataclass, field
 from datetime import datetime
 
 from .core import Core
-from .errors import DeviceBusyError
+from .errors import DeviceBusyError, IviumSoftNotRunningError
 from .pyvium import Pyvium
 from .util import windows_process
 
@@ -71,7 +71,12 @@ class DiscoveryReport:
         orphan_instance_numbers (driver side) and untracked_processes (OS
         side) are the two halves the manager cannot pair automatically. In
         a healthy state their counts match; a mismatch usually means a
-        process still starting up or one that died without deregistering.'''
+        process still starting up or one that died without deregistering.
+
+        A record whose driver instance deregistered while its process is still
+        alive appears on both sides: as a tracked record the manager still
+        holds, and as an untracked process the OS still shows. That pairing is
+        the mismatch, and it keeps the process visible and sweepable.'''
     tracked: list[ManagedInstance]
     orphan_instance_numbers: list[int]
     untracked_processes: list[UntrackedProcess]
@@ -148,7 +153,18 @@ class IviumsoftInstanceManager:
 
             Refuses to close a measuring instance unless force=True.
             Raises ValueError for instances without a known pid; adopt()
-            them first.'''
+            them first.
+
+            An instance that already deregistered from the driver (closed from
+            its own window, crashed, or hung) cannot be asked whether it is
+            measuring. Its leftover process is closed anyway, with a warning,
+            because refusing would leave no way to clean it up.
+
+            Closing an instance does not stop a measurement running on the
+            device itself: on DataSecure hardware the run continues without any
+            instance, and a later instance connecting to that device reloads it
+            and carries the method on if it is still going (IviumSoft 4.1247
+            and newer).'''
         with self._lock:
             record = self._records.get(instance_number)
             if record is None or record.pid is None:
@@ -239,8 +255,13 @@ class IviumsoftInstanceManager:
         with self._lock:
             active_instances = Pyvium.get_active_iviumsoft_instances()
             tracked = [self._records[number] for number in sorted(self._records)]
+            # Only a record whose instance is still active claims its pid. One
+            # whose instance deregistered while its process lives is reported
+            # on both sides, as a held record and as an untracked process:
+            # that pairing mismatch is exactly what this report exists to show.
             known_pids = {record.pid for record in tracked
-                          if record.pid is not None}
+                          if record.pid is not None
+                          and record.instance_number in active_instances}
 
             untracked = [
                 UntrackedProcess(
@@ -325,13 +346,16 @@ class IviumsoftInstanceManager:
     def list_instances(self) -> list[ManagedInstance]:
         '''Returns one record per active driver instance: launched and
             adopted ones carry their pid; unknown orphans have pid None.
-            Stale records (instance or process gone) are pruned.'''
+            Records whose process is gone are pruned. A record whose driver
+            instance deregistered while its process is still alive is kept, so
+            the leftover process stays closable through close(); it drops out
+            of the returned list, which is keyed on the active instances.'''
         with self._lock:
             active_instances = Pyvium.get_active_iviumsoft_instances()
 
             for instance_number in list(self._records):
                 record = self._records[instance_number]
-                if instance_number not in active_instances or not self._is_running(record):
+                if not self._is_running(record):
                     del self._records[instance_number]
 
             return [
@@ -344,12 +368,38 @@ class IviumsoftInstanceManager:
                 for instance_number in active_instances
             ]
 
+    def _device_status(self, instance_number: int) -> int | None:
+        '''Status code for one instance, or None when it is no longer
+            registered with the driver (closed from its own window, crashed,
+            or still winding down).
+
+            None is not the same as idle: the instance cannot be asked whether
+            its device is measuring.'''
+        try:
+            status_code, _ = Pyvium.instance(instance_number).get_device_status()
+        except IviumSoftNotRunningError:
+            return None
+        return status_code
+
     def _is_busy(self, instance_number: int) -> bool:
-        status_code, _ = Pyvium.instance(instance_number).get_device_status()
-        return status_code == DEVICE_STATUS_BUSY
+        return self._device_status(instance_number) == DEVICE_STATUS_BUSY
 
     def _verify_not_busy(self, instance_number: int) -> None:
-        if self._is_busy(instance_number):
+        status_code = self._device_status(instance_number)
+        if status_code is None:
+            # The instance has already left the driver, so it is not running a
+            # measurement through it and closing the leftover process cannot
+            # make anything worse. Reported rather than raised: refusing here
+            # would leave a hung process with no way to clean it up.
+            warnings.warn(
+                f"Instance {instance_number} had already deregistered from the "
+                "driver (closed, crashed, or hung), so it could not be checked "
+                "for a running measurement; cleaning up its leftover process",
+                UserWarning,
+                stacklevel=2,
+            )
+            return
+        if status_code == DEVICE_STATUS_BUSY:
             raise DeviceBusyError(
                 f"Instance {instance_number} is measuring, aborting the "
                 "method first, or use close(force=True) to override")
