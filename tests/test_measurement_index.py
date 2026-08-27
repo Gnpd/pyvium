@@ -89,6 +89,22 @@ def test_filter_by_serial_is_case_insensitive(index_path):
         "DataServer_A_2021.sqlite", "DataServer_B_2023.sqlite"}
 
 
+def test_title_contains_supports_like_wildcards(index_path):
+    """Documented behaviour, not an oversight: _ and % are wildcards.
+
+        Operator-typed titles are rarely remembered exactly, and escaping these
+        would turn searches that find something into searches that find nothing:
+        no real title holds a literal _ or %, so an escaped "Scan_1" matches
+        zero rows while the wildcard form finds "Scan 1"."""
+    with MeasurementIndex(index_path) as index:
+        assert [e.title for e in index.entries(title_contains="Scan_1")] == ["Scan 1"]
+        assert [e.title for e in index.entries(title_contains="Battery%test")] == [
+            "Battery test"]
+        # A term without wildcards is still a plain substring match.
+        assert [e.title for e in index.entries(title_contains="Wenner")] == [
+            "WennerProve"]
+
+
 def test_filter_by_technique_and_title_substring(index_path):
     with MeasurementIndex(index_path) as index:
         cycliscan = index.entries(technique="CycliScan")

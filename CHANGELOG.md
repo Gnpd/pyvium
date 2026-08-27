@@ -118,6 +118,18 @@ and this project adheres to [PEP 440](https://peps.python.org/pep-0440/) version
   the probe and the write, so an invalidation can only land before or after a scan and never
   inside one. Reads stay unlocked, since that is the hot path the cache exists to make cheap.
 
+### Documentation
+
+- **`title_contains` wildcards are now documented behaviour rather than an accident.**
+  `MeasurementIndex.entries(title_contains=...)` passes its term to SQL `LIKE`, so `_` matches
+  any single character and `%` any sequence. Escaping them was considered and rejected:
+  measurement titles are operator-typed and rarely remembered exactly, and an unescaped `LIKE`
+  always returns a superset of the escaped one, so escaping could only ever turn a search that
+  finds something into one that finds nothing. Measured against a real 2102-row catalog, no
+  title contained a literal `_` or `%`, while `title_contains="Scan_1"` found the 537 `Scan 1`
+  rows and `"2us_10uA"` found `2us-10uA-10kHz-1Cy`. The docstring, notebook 11 (and its
+  Spanish and Chinese copies) now state it, and a test pins it.
+
 ## [0.3.0rc4] - 2026-08-21
 
 Fourth release candidate for 0.3.0. Refreshes the bundled IviumSoft driver DLL to

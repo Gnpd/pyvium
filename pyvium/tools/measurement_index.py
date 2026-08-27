@@ -87,9 +87,19 @@ class MeasurementIndex:
             the same device under different casing (e.g. "b47129" vs "B47129")
             depending on its power source, so a case-sensitive match could miss the
             live run and return an older finished one stored under the other casing.
-            title_contains is a substring match. start_after/start_before bound
-            start_time (string comparison works for ISO-like timestamps). Results
-            are newest-first; limit caps the count.'''
+
+            title_contains is a substring match, and supports SQL LIKE wildcards:
+            _ matches any single character and % any sequence of them. Titles are
+            operator-typed and rarely remembered exactly, so this is deliberate:
+            title_contains="Scan_1" finds "Scan 1", and "2us_10uA" finds
+            "2us-10uA-10kHz-1Cy". A term with no wildcards is a plain substring
+            match, and matching is case-insensitive. There is no way to search for
+            a literal _ or % (they always act as wildcards); a term containing one
+            still matches titles holding that character literally, since a
+            wildcard matches itself too.
+
+            start_after/start_before bound start_time (string comparison works for
+            ISO-like timestamps). Results are newest-first; limit caps the count.'''
         if self._connection is None:
             raise RuntimeError(
                 "MeasurementIndex is not open; use it as a context manager or call open().")
