@@ -115,19 +115,24 @@ class MeasurementReader:
         self.close()
 
     def open(self) -> "MeasurementReader":
-        '''Opens the read-only connection and validates the DatabaseVersion.'''
+        '''Opens the read-only connection and validates the DatabaseVersion.
+
+            Safe to call on an already-open reader: the previous connection is
+            closed first, rather than abandoned for the garbage collector to
+            deal with. A WAL reader left open delays IviumSoft's checkpoint.'''
+        self.close()
         self._connection = connect_readonly(self._db_path)
-        self._table_columns_cache = {}
         self._database_version = read_database_version(self._connection)
         verify_database_version(self._database_version)
         return self
 
     def close(self) -> None:
-        '''Closes the connection if open.'''
+        '''Closes the connection if open, and drops everything derived from it.'''
         if self._connection is not None:
             self._connection.close()
             self._connection = None
         self._table_columns_cache = {}
+        self._database_version = None
 
     @property
     def database_version(self) -> int:

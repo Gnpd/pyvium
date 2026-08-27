@@ -49,6 +49,21 @@ def index_path(tmp_path):
     return path
 
 
+def test_reopen_closes_the_previous_connection(index_path):
+    index = MeasurementIndex(index_path)
+    index.open()
+    # Private access is deliberate: the connection is not exposed publicly, and
+    # holding a reference is exactly what keeps an abandoned one alive.
+    first_connection = index._connection  # pylint: disable=protected-access
+
+    index.open()
+
+    with pytest.raises(sqlite3.ProgrammingError):
+        first_connection.execute("SELECT 1")
+    assert index.entries()  # still usable
+    index.close()
+
+
 def test_entries_newest_first(index_path):
     with MeasurementIndex(index_path) as index:
         entries = index.entries()

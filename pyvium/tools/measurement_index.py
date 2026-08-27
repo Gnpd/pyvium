@@ -60,7 +60,11 @@ class MeasurementIndex:
         self.close()
 
     def open(self) -> "MeasurementIndex":
-        '''Opens the read-only connection.'''
+        '''Opens the read-only connection.
+
+            Safe to call on an already-open index: the previous connection is
+            closed first rather than abandoned.'''
+        self.close()
         self._connection = connect_readonly(self._index_path)
         return self
 

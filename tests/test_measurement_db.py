@@ -68,6 +68,22 @@ def db_path(tmp_path):
     return _build(str(tmp_path / "measurement_v9.sqlite"))
 
 
+def test_reopen_closes_the_previous_connection(db_path):
+    reader = MeasurementReader(db_path)
+    reader.open()
+    # Reaching into the private attribute is the only way to observe this: no
+    # public API hands out the connection. Holding it is also the real exposure,
+    # since a surviving reference is what stops refcounting from cleaning up.
+    first_connection = reader._connection  # pylint: disable=protected-access
+
+    reader.open()
+
+    with pytest.raises(sqlite3.ProgrammingError):
+        first_connection.execute("SELECT 1")
+    assert reader.metadata()["DatabaseVersion"] == "9"  # still usable
+    reader.close()
+
+
 def test_metadata_and_version(db_path):
     with MeasurementReader(db_path) as reader:
         assert reader.database_version == 9

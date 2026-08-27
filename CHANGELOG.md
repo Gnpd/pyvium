@@ -94,6 +94,17 @@ and this project adheres to [PEP 440](https://peps.python.org/pep-0440/) version
   code comes back as-is, labelled `"unknown (7)"`, and a channel scan always returns one entry
   per channel.
 
+- **`MeasurementReader.open()` and `MeasurementIndex.open()` now release a previous
+  connection.** Both rebound their connection without closing whatever was already open, so a
+  second `open()` on the same reader (a poller re-opening on retry, say) left the first one for
+  the garbage collector. CPython's refcounting does close it promptly in the simple case, but
+  not when anything still holds a reference, and never as a guarantee. These readers open
+  SQLite read-only and WAL-safe precisely so they can tail a measurement IviumSoft is still
+  writing, and an abandoned read connection is what delays a WAL checkpoint, so the release
+  should be deterministic. `open()` now closes first and is safe to call on an already-open
+  reader; `MeasurementReader.close()` also drops the cached `DatabaseVersion` along with the
+  connection it came from. Use through a `with` block was never affected.
+
 ## [0.3.0rc4] - 2026-08-21
 
 Fourth release candidate for 0.3.0. Refreshes the bundled IviumSoft driver DLL to
