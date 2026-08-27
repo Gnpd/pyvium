@@ -5,7 +5,19 @@ All notable changes to PYVIUM are documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [PEP 440](https://peps.python.org/pep-0440/) versioning.
 
-## [Unreleased]
+## [0.3.0rc5] - 2026-08-27
+
+Fifth release candidate for 0.3.0. A correctness pass over the state the library keeps
+outside the DLL, which has no getter for any of it: the selected-instance and channel
+shadows, the active-instance cache, and the identity the instance manager uses to decide
+which process it may close. It also closes two paths that failed silently, where a
+command that had not worked was reported as if it had: a DLL result code the wrapper does
+not model, and a device-status code outside the documented set. Install it explicitly
+(pip ignores pre-releases by default):
+
+```
+pip install pyvium==0.3.0rc5
+```
 
 ### Fixed
 
@@ -355,6 +367,7 @@ pip install pyvium==0.3.0rc1
   (and, for many calls, connected hardware). The SQLite readers and IDF/CSV tools
   are the exception: they run without the DLL or hardware.
 
+[0.3.0rc5]: https://github.com/Gnpd/pyvium/releases/tag/v0.3.0rc5
 [0.3.0rc4]: https://github.com/Gnpd/pyvium/releases/tag/v0.3.0rc4
 [0.3.0rc3]: https://github.com/Gnpd/pyvium/releases/tag/v0.3.0rc3
 [0.3.0rc2]: https://github.com/Gnpd/pyvium/releases/tag/v0.3.0rc2
