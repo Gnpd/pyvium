@@ -36,6 +36,9 @@ class FakeIviumLib:
         self.setter_result_code = 0
         # Instance whose status probe blows up, to cut a scan short partway.
         self.raise_on_instance = None
+        # Status code to report regardless of the instance, for codes this
+        # wrapper does not model.
+        self.forced_status = None
 
     def IV_open(self):
         # The driver resets its selected instance to 1 on open.
@@ -57,6 +60,8 @@ class FakeIviumLib:
         if self.selected == self.raise_on_instance:
             raise RuntimeError(f'status probe failed on instance {self.selected}')
         self.calls.append(('IV_getdevicestatus', self.selected))
+        if self.forced_status is not None:
+            return self.forced_status
         return 1 if self.selected in self.active_instances else -1
 
     # The fused IV_selectdevice_* setters are select+command in one call: they
@@ -211,6 +216,13 @@ def test_get_active_instances_restores_previous_selection(fake_lib):
 
     assert active == [1, 2, 3]
     assert fake_lib.selected == 2
+
+
+def test_get_device_status_labels_an_unknown_code(fake_lib):
+    """A status query must not raise on a code the wrapper does not model."""
+    fake_lib.forced_status = 7
+
+    assert Pyvium.get_device_status() == (7, 'unknown (7)')
 
 
 def test_scan_relocates_when_previous_instance_is_gone(fake_lib):

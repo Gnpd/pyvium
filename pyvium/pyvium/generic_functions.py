@@ -9,6 +9,9 @@ from ..errors import (DeviceNotConnectedToIviumSoftError,
                       IviumSoftNotRunningError)
 from ..pyvium_verifiers import PyviumVerifiers
 
+# Only the codes the DLL documents. Never index this directly with a code that
+# came back from the DLL: go through device_status_label, which falls back
+# instead of raising if a future release reports something new.
 _STATUS_LABELS = {
     -1: 'no IviumSoft',
     0: 'not connected',
@@ -167,11 +170,14 @@ class GenericFunctions():  # pylint: disable=too-many-public-methods
     @staticmethod
     def get_device_status() -> tuple[int, str]:
         '''It returns -1 (no IviumSoft), 0 (not connected), 1 (available_idle), 2 (available_busy),
-            3 (no device available)'''
+            3 (no device available)
+
+            A code outside that set is returned as-is, labelled
+            "unknown (code)"; a status query does not raise over one.'''
         PyviumVerifiers.verify_driver_is_open()
         PyviumVerifiers.verify_iviumsoft_is_running()
         result_code = Core.IV_getdevicestatus()
-        return result_code, _STATUS_LABELS[result_code]
+        return result_code, device_status_label(result_code)
 
     @staticmethod
     def is_iviumsoft_running() -> bool:
@@ -471,7 +477,7 @@ class GenericFunctions():  # pylint: disable=too-many-public-methods
                         channel=channel,
                         serial_number=serial_number,
                         status_code=status_code,
-                        status_label=_STATUS_LABELS[status_code],
+                        status_label=device_status_label(status_code),
                     ))
             finally:
                 Core.IV_SelectChannel(previous_channel)

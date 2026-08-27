@@ -83,6 +83,17 @@ and this project adheres to [PEP 440](https://peps.python.org/pep-0440/) version
   and `discover()` now reports its process under `untracked_processes` as well, so it is
   visible and `close_orphans()` can sweep it.
 
+- **A device-status code the wrapper does not model no longer raises `KeyError`.**
+  `get_device_status` and `get_channel_statuses` looked their label up by indexing the
+  code -> label map directly, which covers only the documented -1..3. Any other code from a
+  future IviumSoft or DLL release raised a bare `KeyError` out of a read-only status query, an
+  exception neither method documents. In `get_channel_statuses` that cost more than a label:
+  the scan holds the driver lock across up to 32 channels, so one odd channel discarded the
+  whole sweep rather than just its own entry. Both now go through `device_status_label()`,
+  which this release already added for exactly this purpose but did not use: an unrecognised
+  code comes back as-is, labelled `"unknown (7)"`, and a channel scan always returns one entry
+  per channel.
+
 ## [0.3.0rc4] - 2026-08-21
 
 Fourth release candidate for 0.3.0. Refreshes the bundled IviumSoft driver DLL to

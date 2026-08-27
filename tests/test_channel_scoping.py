@@ -54,6 +54,8 @@ class FakeIviumLib:
         self.misgrab_serial = None
         # Optional hook fired on each status poll while a connect is settling.
         self.on_status_poll = None
+        # channel -> status code, for codes this wrapper does not model.
+        self.channel_status_overrides = {}
 
     def IV_open(self):
         # The driver resets its selected instance to 1 on open; channel tabs
@@ -80,6 +82,8 @@ class FakeIviumLib:
         if self.call_delay:
             time.sleep(self.call_delay)
         self.calls.append(('IV_getdevicestatus', self.selected, self.channel))
+        if self.channel in self.channel_status_overrides:
+            return self.channel_status_overrides[self.channel]
         if self.selected not in self.active_instances:
             return -1
         if self.connected.get(self.channel):
@@ -133,6 +137,23 @@ def fake_lib(monkeypatch):
     CoreBase.set_driver_open(False)
     CoreBase.set_selected_instance(1)
     CoreBase.set_selected_channel(1)
+
+
+def test_get_channel_statuses_survives_an_unknown_code(fake_lib):
+    """One odd channel must not cost the whole sweep.
+
+        The scan runs under the driver lock across up to 32 channels, so a raise
+        partway through discards every result, not just the odd one."""
+    fake_lib.channel_status_overrides = {2: 7}
+
+    statuses = Pyvium.get_channel_statuses(3)
+
+    assert [status.channel for status in statuses] == [1, 2, 3]
+    odd = statuses[1]
+    assert odd.status_code == 7
+    assert odd.status_label == 'unknown (7)'
+    assert statuses[0].status_label == 'available_idle'
+    assert statuses[0].serial_number == 'SN001'
 
 
 def test_open_driver_resets_selected_channel_shadow(fake_lib):
