@@ -118,6 +118,25 @@ and this project adheres to [PEP 440](https://peps.python.org/pep-0440/) version
   the probe and the write, so an invalidation can only land before or after a scan and never
   inside one. Reads stay unlocked, since that is the hot path the cache exists to make cheap.
 
+- **An unrecognised DLL result code is no longer reported as success.**
+  `PyviumVerifiers.verify_result_code` is the single check every high-level setter routes
+  through (36 call sites across direct, method, batch and generic mode). It mapped `-1`, `1`,
+  `2` and `3` to typed exceptions and let everything else fall through, so codes such as `4`,
+  `5` or `-2` were indistinguishable from `0` and the caller was told the command had worked.
+  The convention the function documents is `0 = success`, so any non-zero value means it did
+  not; for a library driving potentiostats that meant reporting a setpoint as applied when the
+  firmware may have rejected it. Unrecognised codes now raise `UnexpectedResultCodeError`. This
+  only affects values nobody has observed, so no existing path should change; if one does
+  surface, that command was failing silently before.
+
+### Added
+
+- **`UnexpectedResultCodeError`** (`pyvium.errors`), raised for a DLL result code outside the
+  documented set. It carries the offending value on a `result_code` attribute so callers can
+  branch on it without parsing the message. `docs/error_management.md` now lists it, along with
+  `IllegalCommandError` and `InvalidStateError`, which existed but had been left out of that
+  table.
+
 ### Documentation
 
 - **`title_contains` wildcards are now documented behaviour rather than an accident.**

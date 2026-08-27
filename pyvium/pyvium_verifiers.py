@@ -7,7 +7,8 @@ from .errors import DriverNotOpenError, \
     DeviceNotConnectedToIviumSoftError, \
     DeviceBusyError, \
     NoDeviceDetectedError, \
-    CellOffError
+    CellOffError, \
+    UnexpectedResultCodeError
 
 
 class PyviumVerifiers:
@@ -67,6 +68,12 @@ class PyviumVerifiers:
           2  = argument out of range: a parameter value was rejected by the firmware
           3  = invalid state: the command is valid but cannot run in the device's
                current operating state (e.g. method already running)
+
+        Any other non-zero value raises UnexpectedResultCodeError. The codes above
+        come from observation and the IviumSoft help, not from the bundled header,
+        which documents no return semantics at all; treating an unrecognised one as
+        success would report a command as applied that the firmware may have
+        rejected.
         '''
         suffix = f": {context}" if context else ""
         if result_code == -1:
@@ -85,3 +92,5 @@ class PyviumVerifiers:
             raise InvalidStateError(
                 f"The device is in an invalid state for this command{suffix}"
             )
+        if result_code != 0:
+            raise UnexpectedResultCodeError(result_code, context)
