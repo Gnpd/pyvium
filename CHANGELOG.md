@@ -105,6 +105,19 @@ and this project adheres to [PEP 440](https://peps.python.org/pep-0440/) version
   reader; `MeasurementReader.close()` also drops the cached `DatabaseVersion` along with the
   connection it came from. Use through a `with` block was never affected.
 
+- **A scan already in flight can no longer undo an invalidation of the active-instance
+  cache.** The 32-slot probe ran under the driver lock but wrote its result after releasing it,
+  while `open_driver`, `close_driver`, and the instance manager's `launch`, `close` and
+  `close_orphans` all invalidate the cache without taking that lock. A scan that started before
+  a topology change could therefore finish afterwards and write its stale list over the
+  invalidation, so a later `get_active_iviumsoft_instances(use_cache=True)` returned a set
+  missing a just-launched instance, or still listing one `close()` had just killed. That is
+  worse than the best-effort staleness the cache documents, which is about changes made outside
+  this process: here the library knew the set had changed because it changed it, and lost that.
+  Every cache mutation is now serialised on the driver lock, and the scan holds it across both
+  the probe and the write, so an invalidation can only land before or after a scan and never
+  inside one. Reads stay unlocked, since that is the hot path the cache exists to make cheap.
+
 ## [0.3.0rc4] - 2026-08-21
 
 Fourth release candidate for 0.3.0. Refreshes the bundled IviumSoft driver DLL to

@@ -231,7 +231,7 @@ class GenericFunctions():  # pylint: disable=too-many-public-methods
                 Core.IV_selectdevice(
                     _scan_restore_target(previous_instance, active_instances)
                     if scan_completed else previous_instance)
-        Core.set_active_instances_cache(active_instances)
+            Core.set_active_instances_cache(active_instances)
         return active_instances
 
     @staticmethod

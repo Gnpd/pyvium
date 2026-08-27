@@ -41,12 +41,19 @@ class CoreBase:
     # the instance manager when it launches/closes/adopts an instance. It cannot
     # see instances that appear or close outside this process, so a periodic full
     # rescan is still needed; this only spares the hot status-poll path.
+    # Every mutation is serialised on the driver lock, and the scan holds that
+    # lock across both the probe and the write, so a scan already in flight can
+    # never write its stale list over an invalidation issued meanwhile.
     __active_instances_cache: list | None = None
 
     @staticmethod
     def get_active_instances_cache() -> list | None:
         """
         Returns the cached active-instance list, or None if it must be rescanned.
+
+        Deliberately not locked: this is the hot path the cache exists to make
+        cheap, and reading a list that is about to be invalidated is ordinary
+        cache staleness, which the scan already documents.
         """
         return CoreBase.__active_instances_cache
 
@@ -55,16 +62,26 @@ class CoreBase:
         """
         Stores the result of a full active-instance scan.
 
+        Serialised on the driver lock. The scan already holds it across the
+        probe and this write (the lock is re-entrant), so the pair cannot be
+        split by an invalidation.
+
         :param instances: Iterable of active instance numbers.
         """
-        CoreBase.__active_instances_cache = list(instances)
+        with CoreBase.__lock:
+            CoreBase.__active_instances_cache = list(instances)
 
     @staticmethod
     def invalidate_active_instances_cache() -> None:
         """
         Drops the cached active-instance list so the next read does a full scan.
+
+        Takes the driver lock, so it can block behind an in-flight scan. That
+        wait is the point: an invalidation must land after the scan it overlaps,
+        never be overwritten by it.
         """
-        CoreBase.__active_instances_cache = None
+        with CoreBase.__lock:
+            CoreBase.__active_instances_cache = None
 
     @staticmethod
     def get_lock() -> threading.RLock:

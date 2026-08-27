@@ -39,6 +39,9 @@ class FakeIviumLib:
         # Status code to report regardless of the instance, for codes this
         # wrapper does not model.
         self.forced_status = None
+        # Optional hook fired on each status probe, to interleave another
+        # thread with a scan deterministically.
+        self.on_status_probe = None
 
     def IV_open(self):
         # The driver resets its selected instance to 1 on open.
@@ -60,6 +63,8 @@ class FakeIviumLib:
         if self.selected == self.raise_on_instance:
             raise RuntimeError(f'status probe failed on instance {self.selected}')
         self.calls.append(('IV_getdevicestatus', self.selected))
+        if self.on_status_probe is not None:
+            self.on_status_probe()
         if self.forced_status is not None:
             return self.forced_status
         return 1 if self.selected in self.active_instances else -1
@@ -287,6 +292,51 @@ def test_use_cache_falls_back_to_full_scan_when_empty(fake_lib):
 
     assert active == [1, 2, 3]
     assert ('IV_getdevicestatus', 1) in fake_lib.calls  # a real scan happened
+
+
+def test_invalidate_waits_for_the_driver_lock(fake_lib):
+    """Cache mutations are serialised on the same lock that guards the scan."""
+    Pyvium.get_active_iviumsoft_instances()
+    assert CoreBase.get_active_instances_cache() is not None
+
+    with Core.get_lock():
+        invalidator = threading.Thread(
+            target=Core.invalidate_active_instances_cache)
+        invalidator.start()
+        invalidator.join(timeout=0.2)
+
+        assert invalidator.is_alive()  # blocked, as it must be
+        assert CoreBase.get_active_instances_cache() is not None
+
+    invalidator.join(timeout=2)
+    assert not invalidator.is_alive()
+    assert CoreBase.get_active_instances_cache() is None
+
+
+def test_invalidation_during_a_scan_is_not_lost(fake_lib):
+    """A scan already in flight must not write over an invalidation.
+
+        The scan's list predates whatever the invalidation is reporting, so
+        letting the late write land leaves use_cache=True trusting a set that
+        is missing a just-launched instance or still lists a closed one."""
+    Pyvium.get_active_iviumsoft_instances()  # populate
+    invalidators = []
+
+    def invalidate_from_another_thread():
+        # Fire once, partway through the scan.
+        fake_lib.on_status_probe = None
+        thread = threading.Thread(target=Core.invalidate_active_instances_cache)
+        thread.start()
+        invalidators.append(thread)
+
+    fake_lib.on_status_probe = invalidate_from_another_thread
+
+    Pyvium.get_active_iviumsoft_instances()
+
+    for thread in invalidators:
+        thread.join(timeout=2)
+        assert not thread.is_alive()
+    assert CoreBase.get_active_instances_cache() is None
 
 
 def test_invalidating_cache_forces_a_rescan(fake_lib):
