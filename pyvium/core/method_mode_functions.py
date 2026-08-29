@@ -93,7 +93,13 @@ class MethodModeFunctions(CoreBase):
     def IV_getdata(data_point_index: int) -> tuple[int, float, float, float]:
         '''Get the data from a datapoint with index int, returns 3 values that depend on
             the used technique. For example LSV/CV methods return (E/I/0) Transient methods
-            return (time/I,E/0), Impedance methods return (Z1,Z2,freq) etc.'''
+            return (time/I,E/0), Impedance methods return (Z1,Z2,freq) etc.
+
+            data_point_index is 1-based. Index 0 is a DLL sentinel that returns result
+            code 0 and a (1e-12, 1e-12, 1e-12) placeholder even with no data recorded.
+            An index past the end returns result code 65535 (0xFFFF) and leaves the
+            output buffers untouched, so the returned values are whatever the previous
+            read left in the reused allocation; check the result code before using them.'''
         selected_data_point_index_ptr = ffi.new(LONG_PTR, data_point_index)
         measured_value1_ptr = ffi.new(DOUBLE_PTR)
         measured_value2_ptr = ffi.new(DOUBLE_PTR)
@@ -126,7 +132,16 @@ class MethodModeFunctions(CoreBase):
     @staticmethod
     def IV_getdatafromline(data_point_index: int, scan_index: int) -> tuple[int, float, float, float]:
         '''Same as get_data_point, but with the additional scan_index parameter.
-            This function will allow reading data from non-selected (previous) scans.'''
+            This function will allow reading data from non-selected (previous) scans.
+
+            WARNING: do not pass scan_index below 1. Both indices are 1-based, and on
+            IviumSoft 4.1247 a scan_index of 0 returns result code 0 and then terminates
+            the IviumSoft process, while a scan_index of -1 never returns and leaves
+            IviumSoft allocating memory without bound. Use Pyvium.get_data_point_from_scan,
+            which refuses those values before the call reaches the DLL.
+
+            As with IV_getdata, an out-of-range index returns result code 65535 (0xFFFF)
+            and leaves the output buffers untouched.'''
         selected_data_point_index_ptr = ffi.new(LONG_PTR, data_point_index)
         selected_line_index_ptr = ffi.new(LONG_PTR, scan_index)
         measured_value1_ptr = ffi.new(DOUBLE_PTR)

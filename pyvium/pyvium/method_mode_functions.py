@@ -99,12 +99,30 @@ class MethodModeFunctions():
     def get_data_point(data_point_index: int):
         '''Get the data from a datapoint with index int, returns 3 values that depend on
             the used technique. For example LSV/CV methods return (E/I/0) Transient methods
-            return (time/I,E/0), Impedance methods return (Z1,Z2,freq) etc.'''
+            return (time/I,E/0), Impedance methods return (Z1,Z2,freq) etc.
+
+            data_point_index is 1-based: the first recorded point is 1, and the last
+            valid index is the value get_available_data_points_number() returns. Index 0
+            is a DLL sentinel that reports success and hands back a (1e-12, 1e-12, 1e-12)
+            placeholder even when no measurement has run, so it is rejected here.
+
+            Raises IndexError when the index is past the end of the recorded data. The
+            DLL leaves its output buffers untouched on a failed read, so without this
+            check the call would return the previously read point verbatim and a polling
+            loop would silently duplicate points instead of failing.'''
         PyviumVerifiers.verify_driver_is_open()
         PyviumVerifiers.verify_iviumsoft_is_running()
 
-        _, value1, value2, value3 = Core.IV_getdata(
+        if data_point_index < 1:
+            raise ValueError(
+                "data_point_index is 1-based; the first recorded point is 1 "
+                f"(got {data_point_index})"
+            )
+
+        result_code, value1, value2, value3 = Core.IV_getdata(
             data_point_index)
+        MethodModeFunctions._verify_data_point_result_code(
+            result_code, "get_data_point", data_point_index)
 
         return value1, value2, value3
 
@@ -137,11 +155,53 @@ class MethodModeFunctions():
     @staticmethod
     def get_data_point_from_scan(data_point_index: int, scan_index: int):
         '''Same as get_data_point, but with the additional scan_index parameter.
-            This function will allow reading data from non-selected (previous) scans.'''
+            This function will allow reading data from non-selected (previous) scans.
+
+            Both indices are 1-based: the first point of the first scan is (1, 1).
+
+            scan_index below 1 is rejected before the call reaches the DLL, because those
+            values are not merely invalid, they are destructive: scan_index 0 reports
+            success and then terminates the IviumSoft process, and scan_index -1 never
+            returns while IviumSoft allocates memory without bound.'''
         PyviumVerifiers.verify_driver_is_open()
         PyviumVerifiers.verify_iviumsoft_is_running()
 
-        _, value1, value2, value3 = Core.IV_getdatafromline(
+        if scan_index < 1:
+            raise ValueError(
+                "scan_index is 1-based; the first scan is 1. Values below 1 crash or "
+                f"hang IviumSoft and are refused here (got {scan_index})"
+            )
+        if data_point_index < 1:
+            raise ValueError(
+                "data_point_index is 1-based; the first recorded point is 1 "
+                f"(got {data_point_index})"
+            )
+
+        result_code, value1, value2, value3 = Core.IV_getdatafromline(
             data_point_index, scan_index)
+        MethodModeFunctions._verify_data_point_result_code(
+            result_code, "get_data_point_from_scan", data_point_index, scan_index)
 
         return value1, value2, value3
+
+    # DLL result code for a data read whose index is past the end of the recorded
+    # data. It is 0xFFFF, a 16-bit -1, and it is not one of the codes
+    # PyviumVerifiers.verify_result_code documents; routing it through there would
+    # collide with -1 (no device), so the data getters map it themselves.
+    _INDEX_OUT_OF_RANGE_RESULT_CODE = 65535
+
+    @staticmethod
+    def _verify_data_point_result_code(result_code: int, context: str,
+                                       data_point_index: int,
+                                       scan_index: int | None = None):
+        '''Raise on a failed data read instead of returning the untouched buffers.'''
+        if result_code == MethodModeFunctions._INDEX_OUT_OF_RANGE_RESULT_CODE:
+            location = f"data point {data_point_index}"
+            if scan_index is not None:
+                location += f" of scan {scan_index}"
+            raise IndexError(
+                f"{location} is out of range: {context}. Call "
+                "get_available_data_points_number() for the number of points recorded "
+                "so far"
+            )
+        PyviumVerifiers.verify_result_code(result_code, context)

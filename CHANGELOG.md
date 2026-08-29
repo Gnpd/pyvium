@@ -5,6 +5,34 @@ All notable changes to PYVIUM are documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [PEP 440](https://peps.python.org/pep-0440/) versioning.
 
+## [Unreleased]
+
+### Fixed
+
+- **The data point getters no longer return the previous point when a read fails, and
+  `get_data_point_from_scan` no longer crashes IviumSoft.** `get_data_point` and
+  `get_data_point_from_scan` discarded the DLL result code and returned the `ffi.new()`
+  output buffers whatever it said. The DLL leaves those buffers untouched on a failed
+  read and cffi hands the just-freed allocation straight back, so an index past the end
+  returned the last successfully read point verbatim, byte for byte: a polling loop
+  racing `get_available_data_points_number()` duplicated points instead of failing. Both
+  getters now check the code and raise `IndexError` on the out-of-range code the DLL
+  reports for a data read, 65535 (`0xFFFF`, a 16-bit -1); it is mapped in the getters
+  rather than in `PyviumVerifiers.verify_result_code`, where it would collide with -1
+  (no device).
+
+  Both indices are 1-based, which was undocumented, and passing 0 was the natural first
+  guess. On IviumSoft 4.1247, verified on a demoSTAT Pro+FRA, a `scan_index` of 0 makes
+  `IV_getdatafromline` report success and then terminate the IviumSoft process, and a
+  `scan_index` of -1 never returns while IviumSoft allocates memory without bound (35 MB
+  to 1.3 GB and still climbing after the calling process was killed). A single call is
+  enough; no measurement needs to be running and no concurrency is involved, so
+  `get_data_point_from_scan(0, 0)` killed the application outright. Both getters now
+  reject an index below 1 with `ValueError` before the call reaches the DLL. `Core`
+  remains an unvalidated 1:1 binding, so `Core.IV_getdatafromline` carries the warning in
+  its docstring instead; `docs/method_list.md` marks it :x: and
+  `get_data_point_from_scan` :large_orange_diamond:. Reported to Ivium.
+
 ## [0.3.0rc5] - 2026-08-27
 
 Fifth release candidate for 0.3.0. A correctness pass over the state the library keeps

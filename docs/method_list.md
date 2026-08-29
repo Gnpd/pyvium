@@ -82,7 +82,7 @@ Bundled DLL: IviumSoft **4.1247** (`IV_VersionDllFileStr()` -> `4.1247.10407`, d
 | :heavy_check_mark: set_method_parameter(str, str)       | :heavy_check_mark: IV_setmethodparameter(parname, parvalue)     |
 | :heavy_check_mark: get_available_data_points_number()   | :heavy_check_mark: IV_Ndatapoints(value)                        |
 | :heavy_check_mark: get_data_point(int)                  | :heavy_check_mark: IV_getdata(pointnr, x, y, z)                 |
-| :heavy_check_mark: get_data_point_from_scan(int, int)   | :heavy_check_mark: IV_getdatafromline(pointnr, scannr, x, y, z) |
+| :large_orange_diamond: get_data_point_from_scan(int, int) | :x: IV_getdatafromline(pointnr, scannr, x, y, z) |
 | :heavy_check_mark: get_db_file_name()                   | :heavy_check_mark: IV_getDbFileName(fname)                      |
 | :heavy_check_mark: update_temperature(float)            | :heavy_check_mark: IV_UpdateTemperature(value)                  |
 
