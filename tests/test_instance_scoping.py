@@ -21,6 +21,7 @@ from pyvium.core.core_base import CoreBase
 from pyvium.errors import (DriverNotOpenError, IllegalCommandError,
                            IviumSoftNotRunningError)
 from pyvium.pyvium.instance import PyviumInstance
+from pyvium.util import windows_process
 
 
 class FakeIviumLib:
@@ -42,6 +43,10 @@ class FakeIviumLib:
         # Optional hook fired on each status probe, to interleave another
         # thread with a scan deterministically.
         self.on_status_probe = None
+        # Host window handle per instance, as IV_HostHandle reports it. 0 is
+        # "no handle to check", which is what the scan treats as no evidence,
+        # so by default no instance is filtered out on the host-window check.
+        self.host_handles = {}
 
     def IV_open(self):
         # The driver resets its selected instance to 1 on open.
@@ -68,6 +73,10 @@ class FakeIviumLib:
         if self.forced_status is not None:
             return self.forced_status
         return 1 if self.selected in self.active_instances else -1
+
+    def IV_HostHandle(self):
+        self.calls.append(('IV_HostHandle', self.selected))
+        return self.host_handles.get(self.selected, 0)
 
     # The fused IV_selectdevice_* setters are select+command in one call: they
     # park the global selection on the target instance and never restore it.
@@ -428,3 +437,38 @@ def test_scoped_calls_from_threads_do_not_interleave(fake_lib):
         thread.join()
 
     assert not errors
+
+
+# --- the host-window check on the active-instance scan ---------------------
+#
+# An IviumSoft that was terminated rather than closed cannot deregister, so the
+# driver keeps reporting its slot with nothing behind it, and the slot never
+# heals inside the process that saw it. The one mark it leaves is the window
+# handle it registered, which now names nothing.
+
+
+def test_scan_drops_an_instance_whose_host_window_is_gone(fake_lib, monkeypatch):
+    fake_lib.host_handles = {1: 4001, 2: 4002, 3: 4003}
+    monkeypatch.setattr(windows_process, 'is_window',
+                        lambda hwnd: hwnd in {4001, 4003})
+
+    assert Pyvium.get_active_iviumsoft_instances() == [1, 3]
+
+
+def test_scan_keeps_an_instance_with_no_host_handle_to_check(fake_lib,
+                                                             monkeypatch):
+    '''A handle of zero is missing evidence, not proof of death. Hiding a live
+        instance is far worse than reporting a leaked one, so the scan keeps it.'''
+    fake_lib.host_handles = {2: 0}
+    monkeypatch.setattr(windows_process, 'is_window', lambda _hwnd: False)
+
+    assert Pyvium.get_active_iviumsoft_instances() == [1, 2, 3]
+
+
+def test_scan_can_report_the_raw_driver_view(fake_lib, monkeypatch):
+    fake_lib.host_handles = {2: 4002}
+    monkeypatch.setattr(windows_process, 'is_window', lambda _hwnd: False)
+
+    assert Pyvium.get_active_iviumsoft_instances() == [1, 3]
+    assert Pyvium.get_active_iviumsoft_instances(
+        verify_host_window=False) == [1, 2, 3]

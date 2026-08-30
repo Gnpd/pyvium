@@ -20,6 +20,33 @@ from .util import windows_process
 DEFAULT_IVIUMSOFT_EXE = r"C:\IviumStat\IviumSoft.exe"
 DEVICE_STATUS_BUSY = 2
 
+# Closing a measuring instance does not close IviumSoft: it raises a modal
+# confirmation, and one per window messaged, so a close posts WM_CLOSE to the
+# main form and the TApplication window and gets two of these back. Left
+# unanswered they hold the process open until the close times out and
+# terminates it, and a terminated process cannot deregister its instance
+# number, which is how the number leaks.
+#
+# Recognition is by the button captions rather than the form class, because the
+# captions are the part that has to stay stable for a user to understand the
+# dialog. The class is carried only so a warning can name it. Verified on
+# IviumSoft 4.1247: class TfrmIviumWifiDisconnect, title 'Confirm', with a
+# TPanel reading 'IviumSoft Device: <serial> is measuring'.
+MEASURING_DIALOG_CLASS = 'TfrmIviumWifiDisconnect'
+MEASURING_DIALOG_BUTTONS = {
+    'continue': 'Disconnect and Continue',   # BS_DEFPUSHBUTTON
+    'abort': 'Disconnect and Abort',
+    'cancel': 'Cancel',
+}
+
+
+def _validate_on_measuring(value: str | None) -> None:
+    '''Rejects an unknown on_measuring before any window has been messaged.'''
+    if value is not None and value not in MEASURING_DIALOG_BUTTONS:
+        raise ValueError(
+            "on_measuring must be None or one of "
+            f"{sorted(MEASURING_DIALOG_BUTTONS)}, got {value!r}")
+
 
 def _launch_process(exe_path: str) -> subprocess.Popen:
     '''Starts IviumSoft detached from our stdio.
@@ -147,24 +174,49 @@ class IviumsoftInstanceManager:
                 f"IviumSoft (pid {process.pid}) did not register with the "
                 f"driver within {self._launch_timeout}s")
 
-    def close(self, instance_number: int, force: bool = False) -> None:
-        '''Gracefully closes an instance (window-close message), escalating
-            to a hard terminate if the process does not exit in time.
+    def close(self, instance_number: int, force: bool = False,
+              on_measuring: str | None = 'continue') -> None:
+        '''Gracefully closes an instance with a window-close message.
 
-            Refuses to close a measuring instance unless force=True.
-            Raises ValueError for instances without a known pid; adopt()
-            them first.
+            Raises ValueError for instances without a known pid; adopt() them
+            first.
 
-            An instance that already deregistered from the driver (closed from
-            its own window, crashed, or hung) cannot be asked whether it is
-            measuring. Its leftover process is closed anyway, with a warning,
-            because refusing would leave no way to clean it up.
+            The two parameters cover two separate questions.
+
+            on_measuring answers the modal confirmation a measuring instance
+            raises instead of closing:
+
+              'continue'  (default) Disconnect and Continue. IviumSoft exits,
+                          its instance number is released, and the measurement
+                          carries on running on the device.
+              'abort'     Disconnect and Abort. IviumSoft exits and the run
+                          ends.
+              'cancel'    Cancel. The close is refused and DeviceBusyError is
+                          raised, leaving the process and the run alone. This
+                          is how to say "never close a measuring instance"; it
+                          is checked before anything is messaged and again at
+                          the dialog, which covers an instance that goes busy
+                          in between.
+              None        Leave the dialog alone, so the close cannot complete.
+
+            force says whether this may escalate to TerminateProcess, and
+            nothing else. Without it a close that does not complete within
+            close_timeout raises TimeoutError with the process still running
+            and the record still held, so it can be retried or handed to
+            terminate(). With it, the process is killed on that timeout and
+            also if the close fails unexpectedly, and the original error is
+            re-raised either way. A terminated IviumSoft cannot deregister, so
+            its instance number is leaked for as long as any IviumSoft keeps
+            running; force=True together with on_measuring=None is the only
+            combination that leaks one.
 
             Closing an instance does not stop a measurement running on the
             device itself: on DataSecure hardware the run continues without any
             instance, and a later instance connecting to that device reloads it
-            and carries the method on if it is still going (IviumSoft 4.1247
-            and newer).'''
+            and carries the method on if it is still going. After a close answered
+            with 'continue', a relaunched instance reconnects to a busy device,
+            keeps counting points and aborts normally.'''
+        _validate_on_measuring(on_measuring)
         with self._lock:
             record = self._records.get(instance_number)
             if record is None or record.pid is None:
@@ -185,27 +237,129 @@ class IviumsoftInstanceManager:
                 Core.invalidate_active_instances_cache()
                 return
 
-            if not force:
-                self._verify_not_busy(instance_number)
+            self._check_before_close(instance_number, on_measuring)
 
+            windows_before = set(
+                windows_process.list_visible_windows(record.pid))
             windows_process.close_main_windows(record.pid)
 
+            attempts: dict[int, int] = {}
             deadline = time.monotonic() + self._close_timeout
-            while time.monotonic() < deadline:
-                if not self._is_running(record):
-                    break
-                time.sleep(self._poll_interval)
-            else:
+            # Whether the process is gone, and so whether the record and the
+            # instance number should be given up. False on every path that
+            # leaves IviumSoft running.
+            finished = False
+            try:
+                while time.monotonic() < deadline:
+                    if not self._is_running(record):
+                        break
+                    if self._answer_dialogs(record.pid, windows_before,
+                                            attempts, on_measuring):
+                        # A close raises one confirmation per window messaged,
+                        # so give any sibling dialog a moment to appear and get
+                        # its Cancel too; leaving one open would strand
+                        # IviumSoft on a modal nobody is going to answer.
+                        time.sleep(self._poll_interval)
+                        self._answer_dialogs(record.pid, windows_before,
+                                             attempts, on_measuring)
+                        raise DeviceBusyError(
+                            f"Instance {instance_number} is measuring and the "
+                            "close was cancelled at its confirmation dialog; "
+                            "IviumSoft is still running. Use "
+                            "on_measuring='continue' to close it and leave the "
+                            "measurement running, or 'abort' to end it.")
+                    time.sleep(self._poll_interval)
+                else:
+                    if not force:
+                        raise TimeoutError(
+                            f"IviumSoft instance {instance_number} (pid "
+                            f"{record.pid}) did not close within "
+                            f"{self._close_timeout}s and is still running. "
+                            "Retry, or call terminate() to kill it, which "
+                            "leaks the instance number.")
+                    warnings.warn(
+                        f"IviumSoft instance {instance_number} (pid "
+                        f"{record.pid}) did not close within "
+                        f"{self._close_timeout}s, terminating the process",
+                        UserWarning,
+                        stacklevel=2,
+                    )
+                    self._terminate(record)
+                finished = True
+            except DeviceBusyError:
+                # A Cancel is a deliberate refusal, never a reason to kill.
+                raise
+            except Exception:
+                # force also covers a close that fails unexpectedly. Exception
+                # and not BaseException on purpose: a Ctrl-C must not turn into
+                # a killed instrument and a leaked instance number.
+                if force:
+                    warnings.warn(
+                        f"IviumSoft instance {instance_number} (pid "
+                        f"{record.pid}) failed to close cleanly, terminating "
+                        "the process because force=True",
+                        UserWarning,
+                        stacklevel=2,
+                    )
+                    self._terminate(record)
+                    finished = True
+                raise
+            finally:
+                if finished:
+                    self._records.pop(instance_number, None)
+                    # The leak check rescans, which repopulates the cache, so
+                    # the invalidation has to come after it: a close must
+                    # always leave the cache empty for the next reader.
+                    self._warn_if_leaked(instance_number)
+                # Invalidated on every path, including the ones that raise: the
+                # WM_CLOSE was posted and may still land.
+                Core.invalidate_active_instances_cache()
+
+    def terminate(self, instance_number: int) -> None:
+        '''Kills an instance's process outright. The last resort.
+
+            IviumSoft gets no chance to shut down, which means it never
+            deregisters: the instance number stays in the driver's active list
+            with nothing behind it, and a slot in that state answers every DLL
+            call as though it were alive (its last device status, result code
+            0, and data aliased from the previous read on a live instance).
+            The number is spent for as long as any IviumSoft keeps running, and
+            later launches get the next one up.
+
+            close() avoids all of that, including on a measuring instance, so
+            reach for this only when a close has already failed. The natural
+            pairing is:
+
+                try:
+                    manager.close(n)
+                except TimeoutError:
+                    manager.terminate(n)
+
+            Raises ValueError for instances without a known pid.'''
+        with self._lock:
+            record = self._records.get(instance_number)
+            if record is None or record.pid is None:
+                raise ValueError(
+                    f"Instance {instance_number} has no known pid in this "
+                    "manager. Launch it here or adopt(instance_number, pid) "
+                    "before terminating.")
+
+            if not self._is_our_process(record.pid, record.started_at):
                 warnings.warn(
-                    f"IviumSoft instance {instance_number} (pid {record.pid}) "
-                    f"did not close within {self._close_timeout}s, "
-                    "terminating the process",
+                    f"Instance {instance_number} (pid {record.pid}) is no "
+                    "longer the process this manager recorded: it exited and "
+                    "the pid was reused. Dropping the record without "
+                    "terminating anything.",
                     UserWarning,
                     stacklevel=2,
                 )
-                self._terminate(record)
+                self._records.pop(instance_number, None)
+                Core.invalidate_active_instances_cache()
+                return
 
+            self._terminate(record)
             self._records.pop(instance_number, None)
+            self._warn_if_leaked(instance_number)
             Core.invalidate_active_instances_cache()
 
     def adopt(self, instance_number: int, pid: int) -> ManagedInstance:
@@ -286,28 +440,36 @@ class IviumsoftInstanceManager:
                 untracked_processes=untracked,
             )
 
-    def close_orphans(self, force: bool = False) -> list[int]:
+    def close_orphans(self, force: bool = False,
+                      on_measuring: str | None = 'continue') -> list[int]:
         '''Gracefully closes every untracked IviumSoft process (the
-            untracked_processes of discover()), escalating to a hard
-            terminate per process if it does not exit in time. Returns the
-            pids that were closed.
+            untracked_processes of discover()). Returns the pids that closed.
 
-            Orphan pids cannot be paired with driver instance numbers, so
-            the busy check is all-or-nothing: if any orphan instance is
-            measuring, nothing is closed unless force=True. For instances
-            that are still in use, prefer discover() + adopt() over
-            sweeping them away here.'''
+            Both parameters mean what they mean in close(), and default the
+            same way. For instances that are still in use, prefer discover() +
+            adopt() over sweeping them away here.
+
+            The sweep is batched, so nothing here raises for one process: a
+            'cancel' refusal and, without force, a process that will not close
+            are each reported through a warning and left out of the returned
+            pids. One stubborn orphan is not a reason to abandon the rest.
+
+            on_measuring='cancel' is the exception, because orphan pids cannot
+            be paired with driver instance numbers: if any orphan instance is
+            measuring, nothing is closed at all.'''
+        _validate_on_measuring(on_measuring)
         with self._lock:
             report = self.discover()
-            if not force:
+            if on_measuring == 'cancel':
                 for instance_number in report.orphan_instance_numbers:
                     if self._is_busy(instance_number):
                         raise DeviceBusyError(
                             f"Orphan instance {instance_number} is measuring "
-                            "and cannot be paired with a specific process; "
+                            "and cannot be paired with a specific process, so "
                             "nothing was closed. Adopt and close it "
-                            "individually, or use close_orphans(force=True) "
-                            "to override.")
+                            "individually, or sweep with "
+                            "on_measuring='continue' to close it and leave the "
+                            "measurement running.")
 
             # The whole sweep works from UntrackedProcess records rather than
             # bare pids: discover() already read each start time, and the loop
@@ -316,29 +478,60 @@ class IviumsoftInstanceManager:
             pending = [process for process in report.untracked_processes
                        if self._is_our_process(process.pid, process.started_at)]
             closed_pids = [process.pid for process in pending]
+            windows_before = {
+                process.pid: set(
+                    windows_process.list_visible_windows(process.pid))
+                for process in pending}
+            attempts: dict[int, dict[int, int]] = {
+                process.pid: {} for process in pending}
+            cancelled_pids: set[int] = set()
             for process in pending:
                 windows_process.close_main_windows(process.pid)
 
             deadline = time.monotonic() + self._close_timeout
             while pending:
+                for process in pending:
+                    if self._answer_dialogs(process.pid,
+                                            windows_before[process.pid],
+                                            attempts[process.pid],
+                                            on_measuring):
+                        cancelled_pids.add(process.pid)
                 pending = [
                     process for process in pending
-                    if windows_process.is_process_running(process.pid)
+                    if process.pid not in cancelled_pids
+                    and windows_process.is_process_running(process.pid)
                     and self._is_our_process(process.pid, process.started_at)]
                 if not pending or time.monotonic() >= deadline:
                     break
                 time.sleep(self._poll_interval)
 
+            stuck_pids = {process.pid for process in pending}
             for process in pending:
-                warnings.warn(
-                    f"Orphan IviumSoft process (pid {process.pid}) did not "
-                    f"close within {self._close_timeout}s, terminating the "
-                    "process",
-                    UserWarning,
-                    stacklevel=2,
-                )
-                if self._is_our_process(process.pid, process.started_at):
-                    windows_process.terminate_process(process.pid)
+                if force:
+                    warnings.warn(
+                        f"Orphan IviumSoft process (pid {process.pid}) did not "
+                        f"close within {self._close_timeout}s, terminating the "
+                        "process; its instance number is leaked",
+                        UserWarning,
+                        stacklevel=2,
+                    )
+                    if self._is_our_process(process.pid, process.started_at):
+                        windows_process.terminate_process(process.pid)
+                        stuck_pids.discard(process.pid)
+                else:
+                    warnings.warn(
+                        f"Orphan IviumSoft process (pid {process.pid}) did not "
+                        f"close within {self._close_timeout}s and is still "
+                        "running; it is not reported as closed. Sweep with "
+                        "force=True to terminate it, which leaks its instance "
+                        "number.",
+                        UserWarning,
+                        stacklevel=2,
+                    )
+
+            closed_pids = [pid for pid in closed_pids
+                           if pid not in cancelled_pids
+                           and pid not in stuck_pids]
 
             Core.invalidate_active_instances_cache()
             return closed_pids
@@ -368,6 +561,80 @@ class IviumsoftInstanceManager:
                 for instance_number in active_instances
             ]
 
+    def _answer_dialogs(self, pid: int, windows_before: set[int],
+                        attempts: dict[int, int],
+                        on_measuring: str | None) -> bool:
+        '''Answers the confirmations a close raised on this process.
+
+            Any visible top-level window that was not there before the
+            WM_CLOSE is a candidate. attempts carries state across polls, so a
+            dialog is clicked once, retried once with Enter, then left alone.
+            Returns True when a dialog was answered with Cancel, meaning the
+            caller asked for the close to be refused.'''
+        if on_measuring is None:
+            return False
+
+        wanted_caption = MEASURING_DIALOG_BUTTONS[on_measuring]
+        expected_captions = set(MEASURING_DIALOG_BUTTONS.values())
+        cancelled = False
+
+        for hwnd in windows_process.list_visible_windows(pid):
+            if hwnd in windows_before or attempts.get(hwnd, 0) >= 2:
+                continue
+
+            dialog = windows_process.describe_window(hwnd)
+            buttons = {control.text: control for control in dialog.controls}
+
+            if not expected_captions <= set(buttons):
+                # Not the measuring confirmation. Enter on an unknown Delphi
+                # form would activate whatever its default button happens to
+                # be, so report it and leave it alone; the close falls through
+                # to its timeout as before.
+                captions = sorted(control.text for control in dialog.controls
+                                  if control.text)
+                warnings.warn(
+                    f"IviumSoft (pid {pid}) raised a window this manager does "
+                    f"not recognise while closing: class {dialog.class_name!r}"
+                    f", title {dialog.title!r}, controls {captions}. It was "
+                    "left alone, so the close will time out and terminate the "
+                    "process.",
+                    UserWarning,
+                    stacklevel=2,
+                )
+                attempts[hwnd] = 2
+                continue
+
+            target = buttons[wanted_caption]
+            if attempts.get(hwnd, 0) == 0:
+                windows_process.click_button(target.hwnd)
+            elif target.is_default_button:
+                # The posted click did not take. Enter activates the default
+                # button, which is the form's own answer to being dismissed.
+                windows_process.press_enter(hwnd)
+            attempts[hwnd] = attempts.get(hwnd, 0) + 1
+            cancelled = cancelled or on_measuring == 'cancel'
+
+        return cancelled
+
+    def _warn_if_leaked(self, instance_number: int) -> None:
+        '''Warns when a closed instance number is still registered.
+
+            Reads the unfiltered scan on purpose: the host-window check hides a
+            leaked number from callers, which is the point, but the DLL slot is
+            still spent and the next launch gets the number above it. This is
+            the moment a caller can still do something about it.'''
+        if instance_number in Pyvium.get_active_iviumsoft_instances(
+                verify_host_window=False):
+            warnings.warn(
+                f"Instance {instance_number} is still registered with the "
+                "driver although its process is gone: a terminated IviumSoft "
+                "cannot deregister. The number stays spent for the lifetime "
+                "of this process and later launches get the next one up. "
+                "Closing with on_measuring set (the default) avoids this.",
+                UserWarning,
+                stacklevel=2,
+            )
+
     def _device_status(self, instance_number: int) -> int | None:
         '''Status code for one instance, or None when it is no longer
             registered with the driver (closed from its own window, crashed,
@@ -384,7 +651,15 @@ class IviumsoftInstanceManager:
     def _is_busy(self, instance_number: int) -> bool:
         return self._device_status(instance_number) == DEVICE_STATUS_BUSY
 
-    def _verify_not_busy(self, instance_number: int) -> None:
+    def _check_before_close(self, instance_number: int,
+                            on_measuring: str | None) -> None:
+        '''Reports what is known about the instance before anything is messaged.
+
+            Only on_measuring='cancel' asks for a measuring instance to be left
+            alone, and this is its cheap early exit: one status read, with no
+            WM_CLOSE posted and no dialog raised. The Cancel click in the wait
+            loop still backs out an instance that goes busy between this check
+            and the close, which no status read can prevent.'''
         status_code = self._device_status(instance_number)
         if status_code is None:
             # The instance has already left the driver, so it is not running a
@@ -399,10 +674,12 @@ class IviumsoftInstanceManager:
                 stacklevel=2,
             )
             return
-        if status_code == DEVICE_STATUS_BUSY:
+        if status_code == DEVICE_STATUS_BUSY and on_measuring == 'cancel':
             raise DeviceBusyError(
-                f"Instance {instance_number} is measuring, aborting the "
-                "method first, or use close(force=True) to override")
+                f"Instance {instance_number} is measuring and on_measuring is "
+                "'cancel', so nothing was messaged. Use 'continue' to close it "
+                "and leave the measurement running on the device, or 'abort' "
+                "to end it.")
 
     def _is_our_process(self, pid: int | None,
                         started_at: datetime | None) -> bool:

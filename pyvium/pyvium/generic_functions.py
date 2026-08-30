@@ -8,6 +8,7 @@ from ..core import Core
 from ..errors import (DeviceNotConnectedToIviumSoftError,
                       IviumSoftNotRunningError)
 from ..pyvium_verifiers import PyviumVerifiers
+from ..util import windows_process
 
 # Only the codes the DLL documents. Never index this directly with a code that
 # came back from the DLL: go through device_status_label, which falls back
@@ -100,6 +101,19 @@ def _scan_restore_target(previous_instance: int, active_instances: list) -> int:
     return active_instances[0]
 
 
+def _host_window_is_gone() -> bool:
+    '''True when the selected instance's host window provably no longer exists.
+
+        IV_HostHandle answers with the window the currently selected IviumSoft
+        registered with the driver. A process that was terminated rather than
+        closed leaves that handle behind pointing at nothing, which is the one
+        reliable mark of a leaked slot: the device status is unchanged. Only a
+        non-zero handle that IsWindow rejects counts, so a slot is never hidden
+        on missing evidence.'''
+    handle = Core.IV_HostHandle()
+    return bool(handle) and not windows_process.is_window(handle)
+
+
 @dataclass
 class ChannelStatus:
     '''One multichannel channel as seen during a get_channel_statuses scan.
@@ -186,13 +200,26 @@ class GenericFunctions():  # pylint: disable=too-many-public-methods
         return Core.IV_getdevicestatus() != -1
 
     @staticmethod
-    def get_active_iviumsoft_instances(use_cache: bool = False):
+    def get_active_iviumsoft_instances(use_cache: bool = False,
+                                       verify_host_window: bool = True):
         '''Returns a list of active (open) IviumSoft instances.
 
             A full scan probes all 32 possible instance slots (32
             IV_getdevicestatus calls); it changes the selected instance while it
             runs, so it holds the driver lock and restores the previous selection
             afterwards. The slot count is fixed at 32.
+
+            verify_host_window drops a slot whose IviumSoft process is provably
+            gone. An IviumSoft that was terminated rather than closed cannot
+            deregister, so the driver keeps reporting its slot as active with no
+            process behind it, and the slot never heals: not on a rescan, not on
+            close_driver() + open_driver(), only in a new process. Such a slot
+            still answers IV_HostHandle with the window handle it registered,
+            which is now a handle to nothing, so a slot is dropped only on
+            positive proof, a non-zero handle that IsWindow rejects. A handle of
+            zero or one that cannot be read is left alone: reporting a leaked
+            slot is a much smaller problem than hiding a live instance. Pass
+            False for the raw driver view.
 
             One exception to that restore: if the previously selected instance is
             no longer running and another one is, the scan leaves the selection on
@@ -221,8 +248,11 @@ class GenericFunctions():  # pylint: disable=too-many-public-methods
                 for instance_number in range(1, 33):
                     Core.IV_selectdevice(instance_number)
 
-                    if Core.IV_getdevicestatus() != -1:
-                        active_instances.append(instance_number)
+                    if Core.IV_getdevicestatus() == -1:
+                        continue
+                    if verify_host_window and _host_window_is_gone():
+                        continue
+                    active_instances.append(instance_number)
                 scan_completed = True
             finally:
                 # A scan that died partway holds a partial list, which says

@@ -14,7 +14,7 @@ Bundled DLL: IviumSoft **4.1247** (`IV_VersionDllFileStr()` -> `4.1247.10407`, d
 | :heavy_check_mark: open_driver()                        | :heavy_check_mark: IV_open()               |
 | :heavy_check_mark: close_driver()                       | :heavy_check_mark: IV_close()              |
 | :heavy_check_mark: get_max_device_number()              | :heavy_check_mark: IV_MaxDevices()         |
-| :heavy_check_mark: get_active_iviumsoft_instances()     |                                            |
+| :heavy_check_mark: get_active_iviumsoft_instances(use_cache=False, verify_host_window=True) |          |
 | :heavy_check_mark: select_iviumsoft_instance(int)       | :heavy_check_mark: IV_selectdevice(int)    |
 | :heavy_check_mark: get_device_status()                  | :heavy_check_mark: IV_getdevicestatus()    |
 | :heavy_check_mark: is_iviumsoft_running()               |                                            |
@@ -82,7 +82,7 @@ Bundled DLL: IviumSoft **4.1247** (`IV_VersionDllFileStr()` -> `4.1247.10407`, d
 | :heavy_check_mark: set_method_parameter(str, str)       | :heavy_check_mark: IV_setmethodparameter(parname, parvalue)     |
 | :heavy_check_mark: get_available_data_points_number()   | :heavy_check_mark: IV_Ndatapoints(value)                        |
 | :heavy_check_mark: get_data_point(int)                  | :heavy_check_mark: IV_getdata(pointnr, x, y, z)                 |
-| :large_orange_diamond: get_data_point_from_scan(int, int) | :x: IV_getdatafromline(pointnr, scannr, x, y, z) |
+| :small_orange_diamond: get_data_point_from_scan(int, int) | :x: IV_getdatafromline(pointnr, scannr, x, y, z)     |
 | :heavy_check_mark: get_db_file_name()                   | :heavy_check_mark: IV_getDbFileName(fname)                      |
 | :heavy_check_mark: update_temperature(float)            | :heavy_check_mark: IV_UpdateTemperature(value)                  |
 
@@ -129,10 +129,11 @@ cold-start `open_driver(verify_iviumsoft=False)`.
 | --- | --- |
 | :heavy_check_mark: `IviumsoftInstanceManager(exe_path=..., ...)` | Manager over IviumSoft processes |
 | :heavy_check_mark: `.launch()` -> `ManagedInstance` | Start one IviumSoft process and map it to the new driver instance number |
-| :heavy_check_mark: `.close(instance_number, force=False)` | Gracefully close an instance (refuses a measuring one unless `force`) |
+| :heavy_check_mark: `.close(instance_number, force=False, on_measuring='continue')` | Gracefully close an instance, answering the measuring confirmation dialog; `force` allows a `TerminateProcess` escalation and nothing else |
+| :heavy_check_mark: `.terminate(instance_number)` | Kill the process outright. Leaks the instance number; use only after a close has failed |
 | :heavy_check_mark: `.adopt(instance_number, pid)` | Re-attach to an instance launched outside the manager (the pid must be an IviumSoft process at the manager's `exe_path`) |
 | :heavy_check_mark: `.discover()` -> `DiscoveryReport` | Read-only: pair tracked instances, orphan instance numbers and untracked processes |
-| :heavy_check_mark: `.close_orphans(force=False)` | Close every untracked IviumSoft process the manager does not track |
+| :heavy_check_mark: `.close_orphans(force=False, on_measuring='continue')` | Close every untracked IviumSoft process the manager does not track |
 | :heavy_check_mark: `.list_instances()` -> `list[ManagedInstance]` | One record per active instance (managed carry a pid; orphans have `pid=None`) |
 
 ## Tools Methods

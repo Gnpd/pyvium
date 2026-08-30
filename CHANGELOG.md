@@ -7,7 +7,103 @@ and this project adheres to [PEP 440](https://peps.python.org/pep-0440/) version
 
 ## [Unreleased]
 
+### Changed
+
+- **`IviumsoftInstanceManager.close()`: `force` now gates the kill, not the busy check.** The two
+  parameters guarded the wrong things. Closing a measuring instance is graceful and reversible now
+  that the confirmation dialog is answered (the run carries on running on the device), yet it was
+  the thing `force` protected; `TerminateProcess`, which leaks the instance number irreversibly,
+  happened on a bare `close(n)` with no opt-in at all. And because `force=False` raised at the
+  pre-check before anything was messaged, `on_measuring` was unreachable without `force=True`, so
+  half its values were dead.
+
+  Each parameter now means one thing. **`on_measuring`** decides the fate of a measuring instance
+  through the dialog, and `'cancel'` is how to say "never close one": it is checked before anything
+  is messaged, and again at the dialog, which covers an instance that goes busy in between.
+  **`force`** allows an escalation to `TerminateProcess` and nothing else. Without it a close that
+  does not complete within `close_timeout` raises `TimeoutError` with the process still running and
+  the record still held; with it the process is killed on that timeout and also if the close fails
+  unexpectedly, re-raising the original error either way. A deliberate `'cancel'` is never
+  escalated into a kill, and `KeyboardInterrupt` never triggers one. Leaking an instance number now
+  requires `force=True` **and** `on_measuring=None`, two deliberate choices.
+
+  Three behaviour changes, all verified on a demoSTAT Pro+FRA running an Eoc monitor:
+
+  - `close(n)` on a **measuring** instance closed nothing and raised `DeviceBusyError`; it now
+    closes gracefully in about five seconds with the run continuing on the device and the instance
+    number released. **This is the one silent change**: code relying on the old refusal should pass
+    `on_measuring='cancel'`.
+  - `close(n)` on a **hung** instance terminated it and leaked the number; it now raises
+    `TimeoutError` with the process untouched and the record intact.
+  - `close_orphans()` without `force` terminated the processes that would not close; it now warns
+    per pid and leaves them out of the returned list, so the sweep still reports what it did close.
+
+  `close(n, force=True)` is unchanged in every case.
+
+- **`IviumsoftInstanceManager.terminate(instance_number)` (new).** The kill as an explicit, findable
+  operation rather than only a boolean, and the documented recovery from the new `TimeoutError`:
+
+  ```python
+  try:
+      manager.close(n)
+  except TimeoutError:
+      manager.terminate(n)
+  ```
+
+  It warns that the instance number is leaked, and its docstring says plainly that `close()` avoids
+  that, including on a measuring instance.
+
 ### Fixed
+
+- **Closing a measuring instance no longer leaks its instance number.**
+  `IviumsoftInstanceManager.close(n, force=True)` on a measuring instance posted `WM_CLOSE` and
+  waited. IviumSoft answers that with a modal confirmation rather than closing, and one per window
+  messaged, so two of them appeared a fraction of a second later and nothing messaged them. The
+  close waited out the whole `close_timeout`, escalated to `TerminateProcess`, and a terminated
+  IviumSoft never deregisters: the number stayed in `get_active_iviumsoft_instances()` with no
+  process behind it, surviving a rescan, a cache invalidation and `close_driver()` +
+  `open_driver()`. Leaked numbers accumulate and are visible from any process for as long as at
+  least one IviumSoft is still running, so every later launch got the next number up; only closing
+  every IviumSoft cleared them. This was deterministic, not intermittent: it only looked
+  intermittent while someone was dismissing the dialog by hand.
+
+  `close()` and `close_orphans()` now answer the dialog. The new `on_measuring` selects the button:
+  `'continue'` (the default) clicks Disconnect and Continue, so IviumSoft exits, the number is
+  released, and the measurement carries on running on the device; `'abort'` clicks Disconnect and
+  Abort, which ends the run; `'cancel'` refuses the close; `None` leaves the dialog alone. See the
+  Changed entry above for what each value does now that `force` no longer gates the busy check.
+  The dialog is recognised by its button
+  captions rather than its form class, and a window that is not it is reported through a
+  `UserWarning` naming its class, title and controls and then left alone, because Enter on an
+  unknown Delphi form would activate whatever its default button happens to be. Verified on a
+  demoSTAT Pro+FRA with a 1 k ohm load on IviumSoft 4.1247: the default closes gracefully in about
+  three seconds against ten seconds and a kill, and a relaunched instance reconnects to a busy
+  device and picks the run up.
+
+- **The active-instance scan no longer reports an instance whose IviumSoft is gone.**
+  `get_active_iviumsoft_instances()` decided on `IV_getdevicestatus`, which a leaked slot answers
+  exactly as a live one does. It now also reads `IV_HostHandle`, the window the instance registered
+  with the driver, and drops the slot only on positive proof that window has gone: a non-zero
+  handle that `IsWindow` rejects. A handle of zero or one that cannot be read is missing evidence
+  rather than proof and is left alone, since hiding a live instance would be far worse than
+  reporting a leaked one. `verify_host_window=False` returns the raw driver view, which `close()`
+  uses to warn when a terminate did leak a number.
+
+  A leaked slot is otherwise indistinguishable from a live one through the DLL, which is why the
+  window check rather than a result code does the work. Measured against a live instance running an
+  Eoc monitor, two leaked slots reported the same `devicestatus=2`, the same `Ndatapoints=(0, 76)`
+  and the same `getdata(1)=(0, 1.0)`; every result code is `0`, the status is the one the slot held
+  when its process died, and the point count is the previous read on the live slot handed back
+  through an untouched output buffer. `IV_abort` on a leaked slot also returns `0` and does
+  nothing. A process also starts selected on instance 1, which may itself be leaked, so an unscoped
+  call could go to a dead slot reporting "busy" for ever; the scan relocates the selection onto a
+  slot it reports as active, which clears that as a side effect.
+
+- **`get_available_data_points_number()` checks its result code.** It discarded it the same way the
+  data point getters did. No case has been observed where the DLL reports a failure here, so this
+  is consistency rather than a fix, and it is explicitly not a defence against a leaked slot, which
+  answers with code `0`. Its docstring now records that the count is the highest valid index for
+  the 1-based `get_data_point` and `get_data_point_from_scan`.
 
 - **The data point getters no longer return the previous point when a read fails, and
   `get_data_point_from_scan` no longer crashes IviumSoft.** `get_data_point` and
