@@ -30,7 +30,7 @@ IviumSoft 下载地址：
 
 https://www.ivium.com/support/#Software%20update
 
-当前版本的 PYVIUM 包含 IviumSoft **4.1239** 版本的 DLL。
+当前版本的 PYVIUM 包含 IviumSoft **4.1247** 版本的 DLL。
 
 ---
 
@@ -95,7 +95,7 @@ Tools.convert_idf_dir_to_csv()
 | 笔记本 | 主题 |
 |---|---|
 | `01_getting_started` | 安装、驱动生命周期、错误处理 |
-| `02_device_and_instance_management` | 连接设备、切换实例 |
+| `02_device_and_instance_management` | 连接设备、切换实例、线程安全作用域、多通道 |
 | `03_direct_mode_basics` | 电位/电流控制、电池开关 |
 | `04_direct_mode_signals` | DAC/ADC、数字 I/O、交流信号 |
 | `05_bipotentiostat_and_we32` | BiStat WE2 与 32 通道 WE32 阵列 |
@@ -103,6 +103,8 @@ Tools.convert_idf_dir_to_csv()
 | `07_data_processing` | 解析 IDF 文件、导出为 CSV（无需硬件） |
 | `08_batch_and_synchronization` | 多设备设定点与并行运行 |
 | `09_trigger_reference` | Python–IviumSoft 触发机制 |
+| `10_instance_lifecycle_management` | 启动、列出、接管并关闭 IviumSoft 实例 |
+| `11_sqlite_measurement_readers` | 读取 IviumSoft 的 SQLite 测量文件（无需硬件） |
 
 中文笔记本位于 [`notebooks/zh/`](https://github.com/Gnpd/pyvium/tree/main/notebooks/zh) 目录。
 

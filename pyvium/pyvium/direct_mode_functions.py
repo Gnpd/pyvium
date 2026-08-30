@@ -182,31 +182,37 @@ class DirectModeFunctions():
         PyviumVerifiers.verify_result_code(result_code, "set_mux_channel")
 
     @staticmethod
-    def get_current_trace(points_quantity: int, interval_rate: float):
+    def get_current_trace(points_quantity: int, interval_rate: float) -> list:
         '''Returns a sequence of measured currents at defined samplingrate.
             npoints<=256, interval: 10us to 20ms'''
         PyviumVerifiers.verify_driver_is_open()
         PyviumVerifiers.verify_iviumsoft_is_running()
         PyviumVerifiers.verify_device_is_connected_to_iviumsoft()
-        return Core.IV_getcurrenttrace(points_quantity, interval_rate)
+        result_code, values = Core.IV_getcurrenttrace(points_quantity, interval_rate)
+        PyviumVerifiers.verify_result_code(result_code, "get_current_trace")
+        return values
 
     @staticmethod
-    def get_current_we2_trace(points_quantity: int, interval_rate: float):
+    def get_current_we2_trace(points_quantity: int, interval_rate: float) -> list:
         '''Returns a sequence of measured WE2 currents at defined samplingrate.
             npoints<=256, interval: 10us to 20ms'''
         PyviumVerifiers.verify_driver_is_open()
         PyviumVerifiers.verify_iviumsoft_is_running()
         PyviumVerifiers.verify_device_is_connected_to_iviumsoft()
-        return Core.IV_getcurrentWE2trace(points_quantity, interval_rate)
+        result_code, values = Core.IV_getcurrentWE2trace(points_quantity, interval_rate)
+        PyviumVerifiers.verify_result_code(result_code, "get_current_we2_trace")
+        return values
 
     @staticmethod
-    def get_potential_trace(points_quantity: int, interval_rate: float):
+    def get_potential_trace(points_quantity: int, interval_rate: float) -> list:
         '''Returns a sequence of measured potentials at defined samplingrate.
             npoints<=256, interval: 10us to 20ms'''
         PyviumVerifiers.verify_driver_is_open()
         PyviumVerifiers.verify_iviumsoft_is_running()
         PyviumVerifiers.verify_device_is_connected_to_iviumsoft()
-        return Core.IV_getpotentialtrace(points_quantity, interval_rate)
+        result_code, values = Core.IV_getpotentialtrace(points_quantity, interval_rate)
+        PyviumVerifiers.verify_result_code(result_code, "get_potential_trace")
+        return values
 
     @staticmethod
     def set_digital_output(value: int):
@@ -276,20 +282,50 @@ class DirectModeFunctions():
     @staticmethod
     def set_device_current(instance: int, value: float):
         '''Set current on a selected device instance (galvanostatic mode).
-            instance: IviumSoft instance number; value in Ampere'''
+            instance: IviumSoft instance number; value in Ampere
+
+            IV_selectdevice_setcurrent is select+command fused and leaves the
+            global selection parked on [instance], so this runs under the driver
+            lock and restores the previously selected instance afterwards; the
+            caller's selection is left untouched.
+
+            Note the preconditions are checked against the currently selected
+            instance, not against [instance]; a target instance that is not
+            running surfaces through the result code.'''
         PyviumVerifiers.verify_driver_is_open()
         PyviumVerifiers.verify_iviumsoft_is_running()
-        result_code = Core.IV_selectdevicesetvalue(instance, 0, value)
-        PyviumVerifiers.verify_result_code(result_code, "set_device_current")
+        with Core.get_lock():
+            previous_instance = Core.get_selected_instance()
+            try:
+                result_code = Core.IV_selectdevice_setcurrent(instance, value)
+                PyviumVerifiers.verify_result_code(
+                    result_code, "set_device_current")
+            finally:
+                Core.IV_selectdevice(previous_instance)
 
     @staticmethod
     def set_device_potential(instance: int, value: float):
         '''Set potential on a selected device instance.
-            instance: IviumSoft instance number; value in Volt'''
+            instance: IviumSoft instance number; value in Volt
+
+            IV_selectdevice_setpotential is select+command fused and leaves the
+            global selection parked on [instance], so this runs under the driver
+            lock and restores the previously selected instance afterwards; the
+            caller's selection is left untouched.
+
+            Note the preconditions are checked against the currently selected
+            instance, not against [instance]; a target instance that is not
+            running surfaces through the result code.'''
         PyviumVerifiers.verify_driver_is_open()
         PyviumVerifiers.verify_iviumsoft_is_running()
-        result_code = Core.IV_selectdevicesetvalue(instance, 1, value)
-        PyviumVerifiers.verify_result_code(result_code, "set_device_potential")
+        with Core.get_lock():
+            previous_instance = Core.get_selected_instance()
+            try:
+                result_code = Core.IV_selectdevice_setpotential(instance, value)
+                PyviumVerifiers.verify_result_code(
+                    result_code, "set_device_potential")
+            finally:
+                Core.IV_selectdevice(previous_instance)
 
     @staticmethod
     def set_ac_amplitude(ac_amplitude: float):

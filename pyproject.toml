@@ -5,14 +5,14 @@ authors = [
 ]
 description = "A tiny Python wrapper around the <Software development driver DLL> for IviumSoft."
 exclude = ["docs", "tests"]
-homepage = "https://github.com/SF-Tec/pyvium"
+homepage = "https://github.com/Gnpd/pyvium"
 keywords = ["ivium", "iviumsoft", "ivium software", "ivium compactstat"]
-repository = "https://github.com/SF-Tec/pyvium"
+repository = "https://github.com/Gnpd/pyvium"
 license = "Apache-2.0"
 name = "pyvium"
 packages = [{ include = "pyvium" }]
 readme = "README.md"
-version = "0.2.2"
+version = "0.3.0"
 classifiers = [
     # How mature is this project? Common values are
     #   3 - Alpha
@@ -32,16 +32,22 @@ classifiers = [
     'Programming Language :: Python :: 3',
 ]
 
+[tool.poetry.urls]
+Changelog = "https://github.com/Gnpd/pyvium/blob/main/CHANGELOG.md"
+
 [tool.poetry.dependencies]
-python = "^3.11,<3.13"
-cffi = "^1.15.1"
+python = ">=3.11,<3.14"
+cffi = ">=1.15.1,<3.0"
 tqdm = "^4.65.0"
 
 [tool.poetry.group.dev.dependencies]
-pylint = "^2.15.6"
+pylint = "^3.3"
 autopep8 = "^2.0.0"
 pytest = "^8.3.5"
 psutil = "^7.0.0"
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
 
 [build-system]
 build-backend = "poetry.core.masonry.api"

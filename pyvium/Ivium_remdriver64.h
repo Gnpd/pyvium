@@ -10,6 +10,7 @@
 
 extern "C" {
 #endif
+/* General functions */
 IVIUM_API   IV_open();
 IVIUM_API   IV_close();
 IVIUM_API   IV_MaxDevices();
@@ -26,9 +27,12 @@ IVIUM_API   IV_VersionDllFileStr();
 IVIUM_API   IV_SelectChannel(long *channel);
 IVIUM_API   IV_SelectSn(char *sntext);
 
+/* General functions with selectdevice integrated */
+IVIUM_API   IV_selectdevice_getdevicestatus(long *devnr);
+
+/* Direct Mode functions */
 IVIUM_API   IV_getcellstatus(long *devcellstatus);
 IVIUM_API   IV_setconnectionmode(long *value);
-IVIUM_API   IV_selectdevicesetvalue(long *devnr, long * valuetype, double *value);
 IVIUM_API   IV_setcellon(long *cellon);
 IVIUM_API   IV_setpotential(double *value);
 IVIUM_API   IV_setpotentialWE2(double *value);
@@ -52,12 +56,47 @@ IVIUM_API   IV_getcurrenttrace(long* npoints, double *rate, double *values);
 IVIUM_API   IV_getcurrentWE2trace(long* npoints, double *rate, double *values);
 IVIUM_API   IV_getpotentialtrace(long* npoints, double *rate, double *values);
 
+/* Direct Mode functions with selectdevice integrated */
+IVIUM_API   IV_selectdevice_getcellstatus(long *devnr, long *devcellstatus);
+IVIUM_API   IV_selectdevice_setconnectionmode(long *devnr, long *value);
+IVIUM_API   IV_selectdevice_setcellon(long *devnr, long *cellon);
+IVIUM_API   IV_selectdevice_setpotential(long *devnr, double *value);
+IVIUM_API   IV_selectdevice_setpotentialWE2(long *devnr, double *value);
+IVIUM_API   IV_selectdevice_setcurrent(long *devnr, double *value);
+IVIUM_API   IV_selectdevice_getpotential(long *devnr, double *value);
+IVIUM_API   IV_selectdevice_setcurrentrange(long *devnr, long *value);
+IVIUM_API   IV_selectdevice_setcurrentrangeWE2(long *devnr, long *value);
+IVIUM_API   IV_selectdevice_getcurrent(long *devnr, double *value);
+IVIUM_API   IV_selectdevice_getcurrentWE2(long *devnr, double *value);
+IVIUM_API   IV_selectdevice_setfilter(long *devnr, long *value);
+IVIUM_API   IV_selectdevice_setstability(long *devnr, long *value);
+IVIUM_API   IV_selectdevice_setbistatmode(long *devnr, long *value);
+IVIUM_API   IV_selectdevice_setdac(long *devnr, long *channr, double *value);
+IVIUM_API   IV_selectdevice_getadc(long *devnr, long *channr, double *value);
+IVIUM_API   IV_selectdevice_setmuxchannel(long *devnr, long *value);
+IVIUM_API   IV_selectdevice_setdigout(long *devnr, long *value);
+IVIUM_API   IV_selectdevice_getdigin(long *devnr, long *value);
+IVIUM_API   IV_selectdevice_setfrequency(long *devnr, double *value);
+IVIUM_API   IV_selectdevice_setamplitude(long *devnr, double *value);
+IVIUM_API   IV_selectdevice_getcurrenttrace(long *devnr, long* npoints, double *rate, double *values);
+IVIUM_API   IV_selectdevice_getcurrentWE2trace(long *devnr, long* npoints, double *rate, double *values);
+IVIUM_API   IV_selectdevice_getpotentialtrace(long *devnr, long* npoints, double *rate, double *values);
+
+/* WE32 functions */
 IVIUM_API   IV_we32setchannel(long *index);
 IVIUM_API   IV_we32setoffset(long *index, double *value);
 IVIUM_API   IV_we32setoffsets(long *nval, double *values);
 IVIUM_API   IV_we32getoffsets(long *nval, double *values);
 IVIUM_API   IV_we32readcurrents(double *values);
 
+/* WE32 functions with selectdevice integrated */
+IVIUM_API   IV_selectdevice_we32setchannel(long *devnr, long *index);
+IVIUM_API   IV_selectdevice_we32setoffset(long *devnr, long *index, double *value);
+IVIUM_API   IV_selectdevice_we32setoffsets(long *devnr, long *nval, double *values);
+IVIUM_API   IV_selectdevice_we32getoffsets(long *devnr, long *nval, double *values);
+IVIUM_API   IV_selectdevice_we32readcurrents(long *devnr, double *values);
+
+/* Method Mode functions Method Mode */
 IVIUM_API   IV_readmethod(char *fname);
 IVIUM_API   IV_savemethod(char *fname);
 IVIUM_API   IV_startmethod(char *fname);
@@ -69,11 +108,25 @@ IVIUM_API   IV_Ndatapoints(long *value);
 IVIUM_API   IV_getdata(long *pointnr, double *x, double *y, double *z);
 IVIUM_API   IV_getdatafromline(long *pointnr, long *scannr, double *x, double *y, double *z);
 
+/* Method Mode functions with selectdevice integrated */
+IVIUM_API   IV_selectdevice_readmethod(long *devnr, char *fname);
+IVIUM_API   IV_selectdevice_savemethod(long *devnr, char *fname);
+IVIUM_API   IV_selectdevice_startmethod(long *devnr, char *fname);
+IVIUM_API   IV_selectdevice_abort(long *devnr);
+IVIUM_API   IV_selectdevice_savedata(long *devnr, char *fname);
+IVIUM_API   IV_selectdevice_savedataset(long *devnr, char *fname);
+IVIUM_API   IV_selectdevice_setmethodparameter(long *devnr, char *parname, char *parvalue);
+IVIUM_API   IV_selectdevice_Ndatapoints(long *devnr, long *value);
+IVIUM_API   IV_selectdevice_getdata(long *devnr, long *pointnr, double *x, double *y, double *z);
+
+/* Database functions */
 IVIUM_API   IV_getDbFileName(char *fname);
 
+/* StatusPar functions */
 IVIUM_API   IV_StatusParGet(long *value);
 IVIUM_API   IV_StatusParSet(long *value);
 
+/* Temperature functions */
 IVIUM_API   IV_UpdateTemperature(double *value);
 
 #ifdef __cplusplus

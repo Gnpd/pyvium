@@ -30,7 +30,7 @@ Descarga IviumSoft aquí:
 
 https://www.ivium.com/support/#Software%20update
 
-Esta versión de PYVIUM incluye la DLL de la versión **4.1239** de IviumSoft.
+Esta versión de PYVIUM incluye la DLL de la versión **4.1247** de IviumSoft.
 
 ---
 
@@ -95,7 +95,7 @@ Una serie de Jupyter notebooks cubre la API completa:
 | Notebook | Tema |
 |---|---|
 | `01_getting_started` | Instalación, ciclo de vida del driver, manejo de errores |
-| `02_device_and_instance_management` | Conectar dispositivos, cambiar instancias |
+| `02_device_and_instance_management` | Conectar dispositivos, cambiar instancias, alcance seguro entre hilos, multicanal |
 | `03_direct_mode_basics` | Control de potencial/corriente, encendido/apagado de celda |
 | `04_direct_mode_signals` | DAC/ADC, E/S digital, señal AC |
 | `05_bipotentiostat_and_we32` | BiStat WE2 y array WE32 de 32 canales |
@@ -103,6 +103,8 @@ Una serie de Jupyter notebooks cubre la API completa:
 | `07_data_processing` | Parsear archivos IDF, exportar a CSV (sin hardware) |
 | `08_batch_and_synchronization` | Setpoints multi-dispositivo y ejecución en paralelo |
 | `09_trigger_reference` | Mecanismos de trigger entre Python e IviumSoft |
+| `10_instance_lifecycle_management` | Lanzar, listar, adoptar y cerrar instancias de IviumSoft |
+| `11_sqlite_measurement_readers` | Leer los archivos SQLite de medición de IviumSoft (sin hardware) |
 
 Los notebooks en español se encuentran en el directorio [`notebooks/es/`](https://github.com/Gnpd/pyvium/tree/main/notebooks/es).
 

@@ -1,0 +1,474 @@
+'''Tests for thread-safe instance scoping (Pyvium.on_instance, Pyvium.instance).
+
+The DLL is replaced with an in-memory fake that mimics its global-selection
+behaviour, so no IviumSoft installation or hardware is required.'''
+# Pytest idioms default pylint flags: fixtures are injected as same-named
+# arguments (redefined-outer-name) and may be requested only for their side
+# effects (unused-argument); tests and the fake-DLL methods are self-describing
+# (missing-function-docstring) and the fake mirrors the DLL's IV_* names
+# (invalid-name).
+# Tests also assert exact return shapes (e.g. == [] documents an empty list)
+# rather than truthiness (use-implicit-booleaness-not-comparison).
+# pylint: disable=missing-function-docstring,redefined-outer-name,unused-argument,invalid-name,use-implicit-booleaness-not-comparison
+import threading
+import time
+
+import pytest
+
+from pyvium import Pyvium
+from pyvium.core import Core
+from pyvium.core.core_base import CoreBase
+from pyvium.errors import (DriverNotOpenError, IllegalCommandError,
+                           IviumSoftNotRunningError)
+from pyvium.pyvium.instance import PyviumInstance
+from pyvium.util import windows_process
+
+
+class FakeIviumLib:
+    '''Mimics the DLL: one global selected instance, and a log of every call
+        with the instance that was selected when it happened.'''
+
+    def __init__(self, active_instances=(1, 2, 3)):
+        self.active_instances = set(active_instances)
+        self.selected = 1
+        self.calls = []
+        self.call_delay = 0.0
+        # Result code the fused IV_selectdevice_* setters return (0 = success).
+        self.setter_result_code = 0
+        # Instance whose status probe blows up, to cut a scan short partway.
+        self.raise_on_instance = None
+        # Status code to report regardless of the instance, for codes this
+        # wrapper does not model.
+        self.forced_status = None
+        # Optional hook fired on each status probe, to interleave another
+        # thread with a scan deterministically.
+        self.on_status_probe = None
+        # Host window handle per instance, as IV_HostHandle reports it. 0 is
+        # "no handle to check", which is what the scan treats as no evidence,
+        # so by default no instance is filtered out on the host-window check.
+        self.host_handles = {}
+
+    def IV_open(self):
+        # The driver resets its selected instance to 1 on open.
+        self.selected = 1
+        self.calls.append(('IV_open', self.selected))
+        return 0
+
+    def IV_close(self):
+        self.calls.append(('IV_close', self.selected))
+        return 0
+
+    def IV_selectdevice(self, instance_number_ptr):
+        self.selected = instance_number_ptr[0]
+        self.calls.append(('IV_selectdevice', self.selected))
+
+    def IV_getdevicestatus(self):
+        if self.call_delay:
+            time.sleep(self.call_delay)
+        if self.selected == self.raise_on_instance:
+            raise RuntimeError(f'status probe failed on instance {self.selected}')
+        self.calls.append(('IV_getdevicestatus', self.selected))
+        if self.on_status_probe is not None:
+            self.on_status_probe()
+        if self.forced_status is not None:
+            return self.forced_status
+        return 1 if self.selected in self.active_instances else -1
+
+    def IV_HostHandle(self):
+        self.calls.append(('IV_HostHandle', self.selected))
+        return self.host_handles.get(self.selected, 0)
+
+    # The fused IV_selectdevice_* setters are select+command in one call: they
+    # park the global selection on the target instance and never restore it.
+    def _fused_setter(self, name, instance_ptr):
+        if self.call_delay:
+            time.sleep(self.call_delay)
+        self.selected = instance_ptr[0]
+        self.calls.append((name, self.selected))
+        return self.setter_result_code
+
+    def IV_selectdevice_setcurrent(self, instance_ptr, value_ptr):
+        return self._fused_setter('IV_selectdevice_setcurrent', instance_ptr)
+
+    def IV_selectdevice_setpotential(self, instance_ptr, value_ptr):
+        return self._fused_setter('IV_selectdevice_setpotential', instance_ptr)
+
+
+@pytest.fixture
+def fake_lib(monkeypatch):
+    fake = FakeIviumLib()
+    monkeypatch.setattr(CoreBase, 'get_lib', staticmethod(lambda: fake))
+    CoreBase.set_driver_open(True)
+    CoreBase.set_selected_instance(1)
+    CoreBase.invalidate_active_instances_cache()
+    yield fake
+    CoreBase.set_driver_open(False)
+    CoreBase.set_selected_instance(1)
+
+
+@pytest.fixture
+def cold_lib(monkeypatch):
+    '''Driver closed, zero IviumSoft instances running, the cold-start case.'''
+    fake = FakeIviumLib(active_instances=())
+    monkeypatch.setattr(CoreBase, 'get_lib', staticmethod(lambda: fake))
+    CoreBase.set_driver_open(False)
+    CoreBase.set_selected_instance(1)
+    yield fake
+    CoreBase.set_driver_open(False)
+    CoreBase.set_selected_instance(1)
+
+
+def test_open_driver_raises_and_closes_when_no_iviumsoft(cold_lib):
+    with pytest.raises(IviumSoftNotRunningError):
+        Pyvium.open_driver()
+    assert not Core.is_driver_open()
+
+
+def test_open_driver_cold_start_skips_iviumsoft_check(cold_lib):
+    Pyvium.open_driver(verify_iviumsoft=False)
+
+    assert Core.is_driver_open()
+    assert Pyvium.get_active_iviumsoft_instances() == []
+
+    Pyvium.close_driver()
+    assert not Core.is_driver_open()
+
+
+def test_close_driver_resets_selected_instance_shadow(fake_lib):
+    Pyvium.select_iviumsoft_instance(3)
+    assert Core.get_selected_instance() == 3
+
+    Pyvium.close_driver()
+
+    assert Core.get_selected_instance() == 1
+
+
+def test_open_driver_resets_selected_instance_shadow(fake_lib):
+    Pyvium.select_iviumsoft_instance(3)
+
+    Pyvium.close_driver()
+    Pyvium.open_driver()
+
+    # The driver is back on instance 1, so the shadow must say 1 too.
+    assert Core.get_selected_instance() == 1
+    assert fake_lib.selected == 1
+
+
+def test_on_instance_after_reopen_restores_to_driver_default(fake_lib):
+    """A stale shadow must not move the working instance after a reopen.
+
+        Before the reset, the shadow still read 3 while the driver was on 1, so
+        this block restored to 3 on exit and silently redirected every later
+        unscoped call to the wrong instance."""
+    Pyvium.select_iviumsoft_instance(3)
+    Pyvium.close_driver()
+    Pyvium.open_driver()
+
+    with Pyvium.on_instance(2):
+        assert fake_lib.selected == 2
+
+    assert fake_lib.selected == 1
+    assert Core.get_selected_instance() == 1
+
+
+def test_on_instance_selects_then_restores(fake_lib):
+    with Pyvium.on_instance(3):
+        assert fake_lib.selected == 3
+    assert fake_lib.selected == 1
+
+
+def test_on_instance_restores_selection_on_exception(fake_lib):
+    with pytest.raises(RuntimeError):
+        with Pyvium.on_instance(3):
+            raise RuntimeError('boom')
+    assert fake_lib.selected == 1
+
+
+def test_on_instance_nests(fake_lib):
+    with Pyvium.on_instance(2):
+        with Pyvium.on_instance(3):
+            assert fake_lib.selected == 3
+        assert fake_lib.selected == 2
+    assert fake_lib.selected == 1
+
+
+def test_on_instance_requires_open_driver(fake_lib):
+    CoreBase.set_driver_open(False)
+    with pytest.raises(DriverNotOpenError):
+        with Pyvium.on_instance(2):
+            pass
+
+
+def test_instance_proxy_scopes_every_call(fake_lib):
+    instance = Pyvium.instance(2)
+
+    result_code, label = instance.get_device_status()
+
+    assert (result_code, label) == (1, 'available_idle')
+    # get_device_status calls IV_getdevicestatus twice: once in the
+    # iviumsoft-running verifier and once for the result itself.
+    assert fake_lib.calls == [
+        ('IV_selectdevice', 2),
+        ('IV_getdevicestatus', 2),
+        ('IV_getdevicestatus', 2),
+        ('IV_selectdevice', 1),
+    ]
+
+
+def test_instance_factory_and_attributes(fake_lib):
+    instance = Pyvium.instance(7)
+    assert isinstance(instance, PyviumInstance)
+    assert instance.instance_number == 7
+    with pytest.raises(AttributeError):
+        instance.not_a_pyvium_method  # pylint: disable=pointless-statement
+
+
+def test_get_active_instances_restores_previous_selection(fake_lib):
+    Core.IV_selectdevice(2)
+
+    active = Pyvium.get_active_iviumsoft_instances()
+
+    assert active == [1, 2, 3]
+    assert fake_lib.selected == 2
+
+
+def test_get_device_status_labels_an_unknown_code(fake_lib):
+    """A status query must not raise on a code the wrapper does not model."""
+    fake_lib.forced_status = 7
+
+    assert Pyvium.get_device_status() == (7, 'unknown (7)')
+
+
+def test_scan_relocates_when_previous_instance_is_gone(fake_lib):
+    """A scan must not report which instances are alive and then park on a dead one.
+
+        Instance numbering does not compact when an instance closes, so a shadow
+        pointing at a closed slot while others run is an ordinary state."""
+    fake_lib.active_instances.remove(1)  # closed from its own window
+    assert Core.get_selected_instance() == 1
+
+    active = Pyvium.get_active_iviumsoft_instances()
+
+    assert active == [2, 3]
+    assert fake_lib.selected == 2
+    assert Core.get_selected_instance() == 2
+
+
+def test_scan_leaves_selection_alone_when_nothing_is_active(cold_lib):
+    """With nothing running there is no better target, so do not touch it.
+
+        The instance manager scans before launching, so relocating here would
+        clobber a selection made for the instance that is about to appear."""
+    Pyvium.open_driver(verify_iviumsoft=False)
+    Core.IV_selectdevice(2)
+
+    active = Pyvium.get_active_iviumsoft_instances()
+
+    assert active == []
+    assert cold_lib.selected == 2
+    assert Core.get_selected_instance() == 2
+
+
+def test_scan_restores_previous_selection_when_it_fails_midway(fake_lib):
+    """A partial scan says nothing about instances it never reached.
+
+        Here the scan dies on instance 2, so the list holds only [1]; instance 3
+        is alive but unvisited and must not be mistaken for gone."""
+    Core.IV_selectdevice(3)
+    fake_lib.raise_on_instance = 2
+
+    with pytest.raises(RuntimeError):
+        Pyvium.get_active_iviumsoft_instances()
+
+    assert fake_lib.selected == 3
+    assert Core.get_selected_instance() == 3
+
+
+def test_get_active_populates_cache_and_use_cache_skips_dll(fake_lib):
+    assert Pyvium.get_active_iviumsoft_instances() == [1, 2, 3]
+    calls_after_scan = len(fake_lib.calls)
+
+    cached = Pyvium.get_active_iviumsoft_instances(use_cache=True)
+
+    assert cached == [1, 2, 3]
+    assert len(fake_lib.calls) == calls_after_scan  # cache hit: no DLL calls
+
+
+def test_use_cache_falls_back_to_full_scan_when_empty(fake_lib):
+    CoreBase.invalidate_active_instances_cache()
+
+    active = Pyvium.get_active_iviumsoft_instances(use_cache=True)
+
+    assert active == [1, 2, 3]
+    assert ('IV_getdevicestatus', 1) in fake_lib.calls  # a real scan happened
+
+
+def test_invalidate_waits_for_the_driver_lock(fake_lib):
+    """Cache mutations are serialised on the same lock that guards the scan."""
+    Pyvium.get_active_iviumsoft_instances()
+    assert CoreBase.get_active_instances_cache() is not None
+
+    with Core.get_lock():
+        invalidator = threading.Thread(
+            target=Core.invalidate_active_instances_cache)
+        invalidator.start()
+        invalidator.join(timeout=0.2)
+
+        assert invalidator.is_alive()  # blocked, as it must be
+        assert CoreBase.get_active_instances_cache() is not None
+
+    invalidator.join(timeout=2)
+    assert not invalidator.is_alive()
+    assert CoreBase.get_active_instances_cache() is None
+
+
+def test_invalidation_during_a_scan_is_not_lost(fake_lib):
+    """A scan already in flight must not write over an invalidation.
+
+        The scan's list predates whatever the invalidation is reporting, so
+        letting the late write land leaves use_cache=True trusting a set that
+        is missing a just-launched instance or still lists a closed one."""
+    Pyvium.get_active_iviumsoft_instances()  # populate
+    invalidators = []
+
+    def invalidate_from_another_thread():
+        # Fire once, partway through the scan.
+        fake_lib.on_status_probe = None
+        thread = threading.Thread(target=Core.invalidate_active_instances_cache)
+        thread.start()
+        invalidators.append(thread)
+
+    fake_lib.on_status_probe = invalidate_from_another_thread
+
+    Pyvium.get_active_iviumsoft_instances()
+
+    for thread in invalidators:
+        thread.join(timeout=2)
+        assert not thread.is_alive()
+    assert CoreBase.get_active_instances_cache() is None
+
+
+def test_invalidating_cache_forces_a_rescan(fake_lib):
+    Pyvium.get_active_iviumsoft_instances()        # populate
+    fake_lib.active_instances.add(4)               # topology changes underneath
+
+    # stale cache cannot see instance 4
+    assert Pyvium.get_active_iviumsoft_instances(use_cache=True) == [1, 2, 3]
+
+    CoreBase.invalidate_active_instances_cache()
+
+    # a rescan picks it up
+    assert Pyvium.get_active_iviumsoft_instances(use_cache=True) == [1, 2, 3, 4]
+
+
+def test_set_device_potential_restores_previous_selection(fake_lib):
+    Core.IV_selectdevice(2)
+
+    Pyvium.set_device_potential(3, 0.5)
+
+    # The fused call parks the DLL on instance 3; the caller's selection and the
+    # shadow that on_instance restores from must both come back to 2.
+    assert fake_lib.selected == 2
+    assert Core.get_selected_instance() == 2
+
+
+def test_set_device_current_restores_selection_on_failure(fake_lib):
+    Core.IV_selectdevice(2)
+    fake_lib.setter_result_code = 1  # illegal command
+
+    with pytest.raises(IllegalCommandError):
+        Pyvium.set_device_current(3, 0.001)
+
+    assert fake_lib.selected == 2
+    assert Core.get_selected_instance() == 2
+
+
+def test_set_device_potential_does_not_escape_an_on_instance_block(fake_lib):
+    '''The regression test for the lock bypass: a setpoint issued from another
+        thread must not move the selection out from under an on_instance block.'''
+    fake_lib.call_delay = 0.001  # widen the race window
+    errors = []
+    stop = threading.Event()
+
+    def scoped_worker():
+        for _ in range(20):
+            try:
+                with Pyvium.on_instance(2):
+                    assert fake_lib.selected == 2
+                    Core.IV_getdevicestatus()
+                    assert fake_lib.selected == 2
+            except AssertionError as error:  # pragma: no cover
+                errors.append(error)
+        stop.set()
+
+    def setpoint_worker():
+        while not stop.is_set():
+            Pyvium.set_device_potential(5, 0.1)
+
+    threads = [threading.Thread(target=scoped_worker),
+               threading.Thread(target=setpoint_worker)]
+    for thread in threads:
+        thread.start()
+    for thread in threads:
+        thread.join()
+
+    assert not errors
+
+
+def test_scoped_calls_from_threads_do_not_interleave(fake_lib):
+    fake_lib.call_delay = 0.001  # widen the race window
+    errors = []
+
+    def worker(instance_number):
+        for _ in range(20):
+            try:
+                with Pyvium.on_instance(instance_number):
+                    assert fake_lib.selected == instance_number
+                    Core.IV_getdevicestatus()
+                    assert fake_lib.selected == instance_number
+            except AssertionError as error:  # pragma: no cover
+                errors.append(error)
+
+    threads = [threading.Thread(target=worker, args=(number,))
+               for number in (2, 3)]
+    for thread in threads:
+        thread.start()
+    for thread in threads:
+        thread.join()
+
+    assert not errors
+
+
+# --- the host-window check on the active-instance scan ---------------------
+#
+# An IviumSoft that was terminated rather than closed cannot deregister, so the
+# driver keeps reporting its slot with nothing behind it, and the slot never
+# heals inside the process that saw it. The one mark it leaves is the window
+# handle it registered, which now names nothing.
+
+
+def test_scan_drops_an_instance_whose_host_window_is_gone(fake_lib, monkeypatch):
+    fake_lib.host_handles = {1: 4001, 2: 4002, 3: 4003}
+    monkeypatch.setattr(windows_process, 'is_window',
+                        lambda hwnd: hwnd in {4001, 4003})
+
+    assert Pyvium.get_active_iviumsoft_instances() == [1, 3]
+
+
+def test_scan_keeps_an_instance_with_no_host_handle_to_check(fake_lib,
+                                                             monkeypatch):
+    '''A handle of zero is missing evidence, not proof of death. Hiding a live
+        instance is far worse than reporting a leaked one, so the scan keeps it.'''
+    fake_lib.host_handles = {2: 0}
+    monkeypatch.setattr(windows_process, 'is_window', lambda _hwnd: False)
+
+    assert Pyvium.get_active_iviumsoft_instances() == [1, 2, 3]
+
+
+def test_scan_can_report_the_raw_driver_view(fake_lib, monkeypatch):
+    fake_lib.host_handles = {2: 4002}
+    monkeypatch.setattr(windows_process, 'is_window', lambda _hwnd: False)
+
+    assert Pyvium.get_active_iviumsoft_instances() == [1, 3]
+    assert Pyvium.get_active_iviumsoft_instances(
+        verify_host_window=False) == [1, 2, 3]

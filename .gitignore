@@ -160,3 +160,5 @@ cython_debug/
 #.idea/
 
 docs/_chm_extracted
+local/
+notebooks/hardware-tests/

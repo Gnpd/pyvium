@@ -4,6 +4,9 @@
 :small_orange_diamond: under development
 :x: not working
 
+Bundled DLL: IviumSoft **4.1247** (`IV_VersionDllFileStr()` -> `4.1247.10407`, driver API
+`IV_VersionDll()` -> 203). Minimum supported IviumSoft release is 4.1242.
+
 ### General
 
 | Pyvium Methods                                          | Core Methods                               |
@@ -11,7 +14,7 @@
 | :heavy_check_mark: open_driver()                        | :heavy_check_mark: IV_open()               |
 | :heavy_check_mark: close_driver()                       | :heavy_check_mark: IV_close()              |
 | :heavy_check_mark: get_max_device_number()              | :heavy_check_mark: IV_MaxDevices()         |
-| :heavy_check_mark: get_active_iviumsoft_instances()     |                                            |
+| :heavy_check_mark: get_active_iviumsoft_instances(use_cache=False, verify_host_window=True) |          |
 | :heavy_check_mark: select_iviumsoft_instance(int)       | :heavy_check_mark: IV_selectdevice(int)    |
 | :heavy_check_mark: get_device_status()                  | :heavy_check_mark: IV_getdevicestatus()    |
 | :heavy_check_mark: is_iviumsoft_running()               |                                            |
@@ -24,8 +27,10 @@
 | :heavy_check_mark: check_dll_version()                  | :heavy_check_mark: IV_VersionCheck()       |
 | :heavy_check_mark: get_host_handle()                    | :heavy_check_mark: IV_HostHandle()         |
 | :heavy_check_mark: get_iviumsoft_version()              | :heavy_check_mark: IV_VersionDllFile()     |
-| :heavy_check_mark: get_dll_version_string()             | :x: IV_VersionDllFileStr()  |
+| :heavy_check_mark: get_dll_version_string()             | :heavy_check_mark: IV_VersionDllFileStr()  |
 | :heavy_check_mark: select_channel(int)                  | :heavy_check_mark: IV_SelectChannel(int)   |
+| :heavy_check_mark: get_channel_statuses(int)            |                                            |
+| :heavy_check_mark: connect_device_to_channel(str, int, str)|                                        |
 
 ### Direct Mode
 
@@ -53,11 +58,11 @@
 | :heavy_check_mark: get_digital_input()                  | :heavy_check_mark: IV_getdigin(int)                             |
 | :heavy_check_mark: set_ac_frequency(float)              | :heavy_check_mark: IV_setfrequency(float)                       |
 | :heavy_check_mark: set_ac_amplitude(float)              | :heavy_check_mark: IV_setamplitude(float)                       |
-| :x: get_current_trace(int, float)                       | :x: IV_getcurrenttrace(npoints, rate, values)                   |
-| :x: get_current_we2_trace(int, float)                   | :x: IV_getcurrentWE2trace(npoints, rate, values)                |
-| :x: get_potential_trace(int, float)                     | :x: IV_getpotentialtrace(npoints, rate, values)                 |
-| :heavy_check_mark: set_device_current(int, float)       | :heavy_check_mark: IV_selectdevicesetvalue(int, int, float)     |
-| :heavy_check_mark: set_device_potential(int, float)     |                                                                 |
+| :heavy_check_mark: get_current_trace(int, float)        | :heavy_check_mark: IV_getcurrenttrace(npoints, rate, values)        |
+| :heavy_check_mark: get_current_we2_trace(int, float)    | :heavy_check_mark: IV_getcurrentWE2trace(npoints, rate, values)     |
+| :heavy_check_mark: get_potential_trace(int, float)      | :heavy_check_mark: IV_getpotentialtrace(npoints, rate, values)      |
+| :heavy_check_mark: set_device_current(int, float)       | :heavy_check_mark: IV_selectdevice_setcurrent(int, float)       |
+| :heavy_check_mark: set_device_potential(int, float)     | :heavy_check_mark: IV_selectdevice_setpotential(int, float)     |
 | :small_orange_diamond: set_we32_channel(int)            | :small_orange_diamond: IV_we32setchannel(index)                 |
 | :small_orange_diamond: set_we32_offset(int, float)      | :small_orange_diamond: IV_we32setoffset(index, value)           |
 | :small_orange_diamond: set_we32_offsets(int, list)      | :small_orange_diamond: IV_we32setoffsets(nval, values)          |
@@ -77,7 +82,7 @@
 | :heavy_check_mark: set_method_parameter(str, str)       | :heavy_check_mark: IV_setmethodparameter(parname, parvalue)     |
 | :heavy_check_mark: get_available_data_points_number()   | :heavy_check_mark: IV_Ndatapoints(value)                        |
 | :heavy_check_mark: get_data_point(int)                  | :heavy_check_mark: IV_getdata(pointnr, x, y, z)                 |
-| :heavy_check_mark: get_data_point_from_scan(int, int)   | :heavy_check_mark: IV_getdatafromline(pointnr, scannr, x, y, z) |
+| :small_orange_diamond: get_data_point_from_scan(int, int) | :x: IV_getdatafromline(pointnr, scannr, x, y, z)     |
 | :heavy_check_mark: get_db_file_name()                   | :heavy_check_mark: IV_getDbFileName(fname)                      |
 | :heavy_check_mark: update_temperature(float)            | :heavy_check_mark: IV_UpdateTemperature(value)                  |
 
@@ -88,6 +93,49 @@
 | :heavy_check_mark: set_status_par(int)                  | :heavy_check_mark: IV_StatusParSet(value)  |
 | :heavy_check_mark: get_status_par()                     | :heavy_check_mark: IV_StatusParGet(value)  |
 
+### Instance and channel scoping
+
+Thread-safe selection of an IviumSoft instance (and Multichannel-control channel tab). The
+context managers hold the driver lock across the selection and the commands that follow it; the
+handles expose the full Pyvium API scoped to an instance (and channel). These orchestrate the
+`IV_selectdevice` / `IV_SelectChannel` calls rather than mapping 1:1 to a DLL function. See
+`docs/terminology.md` for device/instance/channel terms.
+
+| Pyvium API | Description |
+| --- | --- |
+| :heavy_check_mark: `Pyvium.on_instance(n)` | Context manager: select instance `n`, run the block under the driver lock, restore the previous selection (even on error) |
+| :heavy_check_mark: `Pyvium.instance(n)` -> `PyviumInstance` | Handle bound to instance `n`; every Pyvium call on it runs inside `on_instance(n)` |
+| :heavy_check_mark: `Pyvium.on_channel(m)` | Context manager: select channel tab `m` atomically; nest inside `on_instance` |
+| :heavy_check_mark: `Pyvium.instance(n).channel(m)` -> `PyviumChannel` | Handle bound to instance `n` + channel `m`; every call scopes both selections |
+
+#### Native `IV_selectdevice_*` variants (Core only)
+
+IviumSoft 4.1242 (DLL v203) added scoped one-call forms of the direct-mode, WE32 and method-mode
+functions, each taking a leading instance number (e.g. `IV_selectdevice_setpotential(n, value)`).
+All of them are bound on `Core` (:heavy_check_mark:) for callers using the raw DLL layer directly;
+they have **no** `Pyvium` counterpart, since the high-level API scopes instances through
+`on_instance` / `Pyvium.instance(n)` above. They are `IV_selectdevice` + the base call fused: they
+leave the global selection parked on the target instance and do not restore it, so they are not
+selection-safe polls (see `IV_selectdevice_getdevicestatus`). The DLL exposes no scoped `connect`,
+`readSN`, `SelectSn`, `SelectChannel` or `getdatafromline`, so those have no variant.
+
+### Instance lifecycle management
+
+`IviumsoftInstanceManager` launches, tracks, adopts and closes IviumSoft processes, mapping each
+to its driver instance number. Windows-only (uses native Win32 process helpers). Pair with the
+cold-start `open_driver(verify_iviumsoft=False)`.
+
+| Class / method | Description |
+| --- | --- |
+| :heavy_check_mark: `IviumsoftInstanceManager(exe_path=..., ...)` | Manager over IviumSoft processes |
+| :heavy_check_mark: `.launch()` -> `ManagedInstance` | Start one IviumSoft process and map it to the new driver instance number |
+| :heavy_check_mark: `.close(instance_number, force=False, on_measuring='continue')` | Gracefully close an instance, answering the measuring confirmation dialog; `force` allows a `TerminateProcess` escalation and nothing else |
+| :heavy_check_mark: `.terminate(instance_number)` | Kill the process outright. Leaks the instance number; use only after a close has failed |
+| :heavy_check_mark: `.adopt(instance_number, pid)` | Re-attach to an instance launched outside the manager (the pid must be an IviumSoft process at the manager's `exe_path`) |
+| :heavy_check_mark: `.discover()` -> `DiscoveryReport` | Read-only: pair tracked instances, orphan instance numbers and untracked processes |
+| :heavy_check_mark: `.close_orphans(force=False, on_measuring='continue')` | Close every untracked IviumSoft process the manager does not track |
+| :heavy_check_mark: `.list_instances()` -> `list[ManagedInstance]` | One record per active instance (managed carry a pid; orphans have `pid=None`) |
+
 ## Tools Methods
 | Tools Methods (DataProcessing)                                | Description                                                                                    |
 | ------------------------------------------------------------- | ---------------------------------------------------------------------------------------------- |
@@ -96,3 +144,24 @@
 | :heavy_check_mark: get_all_idf_data(idf_path)                 | Extracts all data (primary and extra data) from a ivium .idf file and returns a data dictionary |
 | :heavy_check_mark: convert_idf_to_csv(idf_path)               | Extracts the data from a ivium .idf file and saves the data to a .csv file                     |
 | :heavy_check_mark: convert_idf_dir_to_csv(idf_dir_path='.')   | Extracts the data of all .idf files on a directory and saves the data to .csv files            |
+
+### Measurement SQLite readers
+
+Read the SQLite files IviumSoft writes (`DataServer_*.idf.sqlite`) and the catalog
+(`index.sqlite`). Read-only, WAL-safe, schema-versioned (DatabaseVersions 5-9 verified); no DLL or
+hardware needed. See `docs/terminology.md` for device/instance/channel terms.
+
+| Class / method | Description |
+| --- | --- |
+| :heavy_check_mark: `MeasurementReader(path)` | Context-managed reader for one measurement file; validates DatabaseVersion |
+| :heavy_check_mark: `.metadata()` / `.database_version` | metadata table as a dict / the DatabaseVersion |
+| :heavy_check_mark: `.measurements()` / `.method_parameters()` / `.measurement_parts()` | measurement rows / method key-values / cycle-level-channel parts |
+| :heavy_check_mark: `.read_points(after_point_id=None)` | Data points (t,x,y,z,q + decoded status + part context); `after_point_id` for incremental tailing |
+| :heavy_check_mark: `.read_impedance(after_point_id=None)` | FRA/EIS points (frequency, Z', Z'') |
+| :heavy_check_mark: `.has_overview()` / `.read_overview_points(...)` | Whole-run curated preview via the `point_small` index (raises if absent; check `has_overview` first) |
+| :heavy_check_mark: `.part_summaries(from_part_id=None)` | Per-task point_count and t-range; `from_part_id` scopes the GROUP BY to the still-growing tail (inclusive) |
+| :heavy_check_mark: `.latest_point_id()` / `.latest_part_id()` | Highest point_id / measurementpart_id (tailer catch-up cursors) |
+| :heavy_check_mark: `.to_csv(path)` / `.to_dataframe()` | Export points to CSV / pandas (pandas optional, lazy import) |
+| :heavy_check_mark: `MeasurementIndex(path)` | Context-managed reader for index.sqlite |
+| :heavy_check_mark: `.entries(...)` | Filter the catalog (serial, device, technique, title, project, operator, date range, limit) |
+| :heavy_check_mark: `.resolve_path(entry, base_dir)` / `.open_measurement(entry, base_dir)` | Build a file path / open its MeasurementReader |
