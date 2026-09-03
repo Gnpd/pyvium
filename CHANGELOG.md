@@ -89,11 +89,6 @@ Behaviour changes for anyone upgrading from 0.2.x:
   then terminates the IviumSoft process, and a `-1` never returns while IviumSoft allocates
   memory without bound. `get_available_data_points_number` checks its result code too.
 
-- **`tools.column_labels()` defaults to the hardware-confirmed mapping** (`y=potential,
-  z=current`); it previously shipped the opposite provisional labels. The readers already
-  expose the raw `x/y/z/q` columns on `DataPoint`, so only the optional label helper is
-  affected.
-
 - **A result code or device status outside the documented set is no longer reported as
   success.** An unrecognised DLL result code now raises `UnexpectedResultCodeError`, and an
   unmodelled device status no longer raises `KeyError`. Both affect values nobody has observed,
